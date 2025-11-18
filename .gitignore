@@ -1,0 +1,65 @@
+# Ignore Visual Studio build folders
+[Bb]in/
+[Oo]bj/
+x64/
+Debug/
+Release/
+ipch/
+out/
+
+# Visual Studio cache and temp files
+*.VC.db
+*.VC.opendb
+*.vscode/
+*.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# MASM object and listing files
+*.obj
+*.lst
+*.map
+*.pdb
+*.idb
+*.ilk
+
+# Executables and binaries
+*.exe
+*.dll
+*.lib
+
+# MASM intermediate files
+*.asm~      # temporary backups
+*.tmp
+
+# Logs
+*.log
+
+# Ignore build artifacts
+*.ilk
+*.pch
+*.psess
+*.vsp
+*.vspx
+
+# NuGet packages
+*.nupkg
+packages/
+*.snupkg
+
+# Ignore temporary OS files
+Thumbs.db
+ehthumbs.db
+.DS_Store
+
+# Backup files
+*.bak
+
+# Editor and tooling settings
+*.swp
+*.cache
+
+# Other project data not required in Git
+*.generated/
