@@ -45,7 +45,7 @@ INCLUDELIB user32.lib
 
     PlayerName BYTE 20 DUP(0)
 
-    highscoresFile   BYTE "highscores.txt", 0
+    highscoresFile    BYTE "highscores.txt", 0
     LeaderBoardNames  BYTE 10 DUP(20 DUP(0))   ; 10 names, each 20 chars
     LeaderBoardScores DWORD 10 DUP(0)
     LeaderBoardCount  DWORD 0
@@ -61,6 +61,12 @@ INCLUDELIB user32.lib
     SelectTaxi_Line5 BYTE "           ____) |  __/ |  __/ (__| |_     | | (_| |>  <| |", 0
     SelectTaxi_Line6 BYTE "          |_____/ \___|_|\___|\___|\__|    |_|\__,_/_/\_\_|", 0
 
+
+    LEADERBOARD_Line1 BYTE " _     _____    _    ____  _____ ____  ____   ___    _    ____  ____",   0
+    LEADERBOARD_Line2 BYTE "| |   | ____|  / \  |  _ \| ____|  _ \| __ ) / _ \  / \  |  _ \|  _ \",  0
+    LEADERBOARD_Line3 BYTE "| |   |  _|   / _ \ | | | |  _| | |_) |  _ \| | | |/ _ \ | |_) | | | |", 0
+    LEADERBOARD_Line4 BYTE "| |___| |___ / ___ \| |_| | |___|  _ <| |_) | |_| / ___ \|  _ <| |_| |", 0
+    LEADERBOARD_Line5 BYTE "|_____|_____/_/   \_\____/|_____|_| \_\____/ \___/_/   \_\_| \_\____/",  0
 
     Car_line1 BYTE "                      _   ",  0
     Car_line2 BYTE "                   0=[_]=0",  0
@@ -91,8 +97,8 @@ INCLUDELIB user32.lib
     difficultyMsg BYTE "*** DIFFICULTY LEVEL ***",0Dh,0Ah
                   BYTE "Easy, Medium, Hard options...", 0
                   
-    leaderboardMsg BYTE "*** LEADERBOARD ***",0Dh,0Ah
-                   BYTE "Top 10 scores will be displayed here...", 0
+    leaderboardMsg BYTE "***No LEADERBOARD Record Yet***",0Dh,0Ah
+                   BYTE "NO Leaderboard record be the first one to register :)", 0
                    
     instructionsMsg BYTE "*** INSTRUCTIONS ***",0Dh,0Ah
                     BYTE "Game rules and controls...", 0
@@ -536,7 +542,7 @@ EnterPlayer_Name  ENDP
 ; LeaderboardScreen
 ; =============================================
 LeaderboardScreen PROC
-    mov  edx, OFFSET highscoresFile
+    mov  edx,        OFFSET highscoresFile
     call OpenInputFile
     mov  fileHandle, eax
 
@@ -554,23 +560,23 @@ LeaderboardScreen PROC
     mov esi, 0
 read_loop:
     ; Calculate name offset manually
-    mov eax, esi
-    mov ebx, 20
-    mul ebx         ; EAX = ESI × 20 (offset from start of array)
-    mov edx, OFFSET LeaderBoardNames
-    add edx, eax
-    mov eax, fileHandle
-    mov ecx, 20
+    mov  eax, esi
+    mov  ebx, 20
+    mul  ebx                          ; EAX = ESI × 20 (offset from start of array)
+    mov  edx, OFFSET LeaderBoardNames
+    add  edx, eax
+    mov  eax, fileHandle
+    mov  ecx, 20
     call ReadFromFile
 
     ; Calculate score offset manually  
-    mov eax, esi
-    mov ebx, 4
-    mul ebx
-    mov edx, OFFSET LeaderBoardScores
-    add edx, eax
-    mov eax, fileHandle
-    mov ecx, 4
+    mov  eax, esi
+    mov  ebx, 4
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardScores
+    add  edx, eax
+    mov  eax, fileHandle
+    mov  ecx, 4
     call ReadFromFile
 
     inc esi
@@ -581,22 +587,24 @@ read_loop:
 close_file:
     mov  eax, fileHandle
     call CloseFile
+    call DisplayLeaderboard
     ret
 
 Createnewfile:
-    mov  edx, OFFSET highscoresFile
+    mov  edx,              OFFSET highscoresFile
     call CreateOutputFile
-    mov  fileHandle, eax
+    mov  fileHandle,       eax
     call CloseFile
     mov  LeaderBoardCount, 0
+    call DisplayLeaderboard
     ret
 LeaderboardScreen ENDP
 
 ; =============================================
 ; Save Leaderboard to File
 ; =============================================
-saveLeaderBoard PROC
-    mov  edx, OFFSET highscoresFile
+saveLeaderBoard   PROC
+    mov  edx,        OFFSET highscoresFile
     call CreateOutputFile
     mov  fileHandle, eax
 
@@ -611,23 +619,23 @@ saveLeaderBoard PROC
     mov esi, 0
 write_loop:
     ; Calculate name offset manually
-    mov eax, esi
-    mov ebx, 20
-    mul ebx
-    mov edx, OFFSET LeaderBoardNames
-    add edx, eax
-    mov eax, fileHandle
-    mov ecx, 20
+    mov  eax, esi
+    mov  ebx, 20
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardNames
+    add  edx, eax
+    mov  eax, fileHandle
+    mov  ecx, 20
     call WriteToFile
 
     ; Calculate score offset manually
-    mov eax, esi
-    mov ebx, 4
-    mul ebx
-    mov edx, OFFSET LeaderBoardScores
-    add edx, eax
-    mov eax, fileHandle
-    mov ecx, 4
+    mov  eax, esi
+    mov  ebx, 4
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardScores
+    add  edx, eax
+    mov  eax, fileHandle
+    mov  ecx, 4
     call WriteToFile
 
     inc esi
@@ -639,14 +647,101 @@ close_file_save:
     mov  eax, fileHandle
     call CloseFile
     ret
-saveLeaderBoard ENDP
-
+saveLeaderBoard    ENDP
 
 
 ; =============================================
 ; Display Leaderboard
 ; =============================================
+DisplayLeaderboard PROC
+    call Clrscr
 
+    mov  eax, cyan + (black * 16)
+    call SetTextColor
+
+    mov  edx, OFFSET LEADERBOARD_Line1
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET LEADERBOARD_Line2
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET LEADERBOARD_Line3
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET LEADERBOARD_Line4
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET LEADERBOARD_Line5
+    call WriteString
+    call Crlf
+    call Crlf
+
+    ; Check if leaderboard is empty
+    cmp LeaderBoardCount, 0
+    je  no_scores
+
+    mov  eax, white + (black * 16)
+    call SetTextColor
+
+    mov ecx, LeaderBoardCount
+    mov esi, 0
+score_loop:
+    ; Display rank number
+    mov  eax, esi
+    inc  eax
+    call WriteDec
+    mov  al,  '.'
+    call WriteChar
+    mov  al,  ' '
+    call WriteChar
+
+    ; Display name
+    mov  eax, esi
+    mov  ebx, 20
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardNames
+    add  edx, eax
+    call WriteString
+
+    ; Add spaces for alignment (fixed number for now)
+    mov ecx, 15
+space_loop:
+    mov  al, ' '
+    call WriteChar
+    loop space_loop
+
+    ; Display score (manual calculation)
+    mov  eax, esi
+    mov  ebx, 4
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardScores
+    add  edx, eax
+    mov  eax, [edx]                    ; Get the score value
+    call WriteDec
+    call Crlf
+
+    inc  esi
+    loop score_loop
+    jmp  done_display
+
+no_scores:
+    mov  eax, Red + (black * 16)
+    call SetTextColor
+    call Crlf
+    call Crlf
+    mov  edx, OFFSET leaderboardMsg
+    call WriteString
+    mov  eax, White + (black * 16)
+    call SetTextColor
+    call Crlf
+
+done_display:
+    call Crlf
+    mov  edx, OFFSET pressAnyKey
+    call WriteString
+    call ReadChar
+    ret
+DisplayLeaderboard ENDP
 
 
 
@@ -665,7 +760,7 @@ saveLeaderBoard ENDP
 ; =============================================
 ; Placeholder Screens for other Menu Option
 ; =============================================
-NewGameScreen   PROC
+NewGameScreen      PROC
     call Clrscr
     mov  edx, OFFSET newGameMsg
     call WriteString
@@ -691,7 +786,6 @@ DifficultyScreen   PROC
     call WaitForKey
     ret
 DifficultyScreen   ENDP
-
 
 
 InstructionsScreen PROC
