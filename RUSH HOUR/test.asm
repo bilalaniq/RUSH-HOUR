@@ -15,7 +15,8 @@ INCLUDELIB user32.lib
 ; =============================================
 .data
 
-             
+    legendMsg BYTE "Legend: P=Passenger  T=Taxi  C=Car  ▓=Building", 0
+            
     title_line1  BYTE "                  _____________  ______________  _______  _____________  _________",  0
     title_line2  BYTE "      _           ___  __ \_  / / /_  ___/__  / / /__  / / /_  __ \_  / / /__  __ \", 0
     title_line3  BYTE "   0=[_]=0        __  /_/ /  / / /_____ \__  /_/ /__  /_/ /_  / / /  / / /__  /_/ /", 0
@@ -41,7 +42,7 @@ INCLUDELIB user32.lib
 
 
     prompt2 BYTE "                     Please choose any car you like (1-3): ",                0
-    prompt3 BYTE "                     Please enter player Name (show be with in 19 words): ", 0
+    prompt3 BYTE "                     Please enter player Name (show be with in 20 words): ", 0
 
     PlayerName BYTE 20 DUP(0)
 
@@ -75,11 +76,40 @@ INCLUDELIB user32.lib
     Car_line5 BYTE "                  []=\_/=[]", 0
     Car_line6 BYTE "                     _V_",    0
     Car_line7 BYTE "                   '-----'",  0
+
+
+    ; Board dimensions
+    BOARD_WIDTH  = 20
+    BOARD_HEIGHT = 20
+
+
+    ROAD_CHAR      BYTE ' ', 0 ; Empty road
+    BUILDING_CHAR  BYTE 178, 0 ; ASCII 178 for buildings 
+    TAXI_CHAR      BYTE 'T', 0 ; taxi
+    PASSENGER_CHAR BYTE 'P', 0 ; Passenger
+    CAR_CHAR       BYTE 'C', 0 ; Other cars
+    OBSTACLE_CHAR  BYTE '#', 0 ; Obstacles
+
+
+    
+    
+    
+    
+
+    ; Board display messages
+    boardTitle BYTE "=== RUSH HOUR GAME BOARD ===",                                     0
+    testMsg    BYTE "Board displayed successfully! Press any key to return to menu...", 0
+
+
+
     
     ; Error messages
     invalidChoice   BYTE "Invalid choice!",                         0
     pressAnyKey     BYTE "Press any key to continue...",            0
     invalidNameSize BYTE "The name cannot be longer than 19 words", 0
+
+    nameAcceptedMsg BYTE "Name accepted successfully!", 0
+    tryAgainMsg     BYTE "Please try again.",           0
     
     ; Current selection
     userChoice       BYTE ?
@@ -282,6 +312,7 @@ ProcessMenuChoice PROC
 
 start_new_game:
     call SelectTaxiScreen
+    call start_game
     ret
     
 continue_game:
@@ -471,7 +502,7 @@ SelectTaxiScreen ENDP
 
 
 ; =============================================
-; Enter Player Name
+; Enter Player Name - FIXED VERSION
 ; =============================================
 EnterPlayer_Name PROC
     call Clrscr
@@ -504,35 +535,62 @@ EnterPlayer_Name PROC
     call SetTextColor
     
 Nameinput_loop:
+    ; Clear the previous input
+    mov edi, OFFSET PlayerName
+    mov ecx, SIZEOF PlayerName
+    mov al,  0
+    rep stosb
+    
     mov  edx, OFFSET prompt3
     call WriteString
     
-    ; Read the player name
+    ; Read the player name with length limit
     mov  edx,              OFFSET PlayerName
     mov  ecx,              SIZEOF PlayerName
     call ReadString
     mov  PlayerNameLength, al
     
-    ; Validate name length
+    ; Validate name length - STRICT 19 char limit
     cmp PlayerNameLength, 0
     je  invalid_input
     cmp PlayerNameLength, 19
-    ja  invalid_input
+    ja  name_too_long
     
-    ret
-
-invalid_input:
-    mov  edx, OFFSET invalidNameSize
+    ; Ensure null termination
+    movzx ebx,                         PlayerNameLength
+    mov   byte ptr [PlayerName + ebx], 0
+    
+    ; Display success message
+    call Crlf
+    call Crlf
+    mov  edx, OFFSET nameAcceptedMsg
     call WriteString
     call Crlf
-    
     mov  edx, OFFSET pressAnyKey
     call WriteString
     call ReadChar
     
-    call EnterPlayer_Name
     ret
 
+name_too_long:
+    call Crlf
+    mov  edx, OFFSET invalidNameSize
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET tryAgainMsg
+    call WriteString
+    call Crlf
+    jmp  Nameinput_loop
+
+invalid_input:
+    call Crlf
+    mov  edx, OFFSET invalidNameSize
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET tryAgainMsg
+    call WriteString
+    call Crlf
+    jmp  Nameinput_loop
 EnterPlayer_Name  ENDP
 
 
@@ -864,84 +922,84 @@ AddScoreToLeaderboard ENDP
 ; =============================================
 ; Display Leaderboard
 ; =============================================
-DisplayLeaderboard PROC
+DisplayLeaderboard    PROC
     call Clrscr
 
     ; Load leaderboard data first
-    mov edx, OFFSET highscoresFile
+    mov  edx,        OFFSET highscoresFile
     call OpenInputFile
-    mov fileHandle, eax
+    mov  fileHandle, eax
 
     cmp fileHandle, INVALID_HANDLE_VALUE
-    je no_file
+    je  no_file
 
     ; Read the count
-    mov edx, OFFSET LeaderBoardCount
-    mov ecx, SIZEOF LeaderBoardCount
+    mov  edx, OFFSET LeaderBoardCount
+    mov  ecx, SIZEOF LeaderBoardCount
     call ReadFromFile
 
     ; Read the actual data
     mov ecx, LeaderBoardCount
     cmp ecx, 0
-    je close_display_file
+    je  close_display_file
 
     mov esi, 0
 read_display_loop:
     ; Read name
-    mov eax, esi
-    mov ebx, 20
-    mul ebx
-    mov edx, OFFSET LeaderBoardNames
-    add edx, eax
-    mov eax, fileHandle
-    mov ecx, 20
+    mov  eax, esi
+    mov  ebx, 20
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardNames
+    add  edx, eax
+    mov  eax, fileHandle
+    mov  ecx, 20
     call ReadFromFile
 
     ; Read score
-    mov eax, esi
-    mov ebx, 4
-    mul ebx
-    mov edx, OFFSET LeaderBoardScores
-    add edx, eax
-    mov eax, fileHandle
-    mov ecx, 4
+    mov  eax, esi
+    mov  ebx, 4
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardScores
+    add  edx, eax
+    mov  eax, fileHandle
+    mov  ecx, 4
     call ReadFromFile
 
     inc esi
     cmp esi, LeaderBoardCount
-    jb read_display_loop
+    jb  read_display_loop
 
 close_display_file:
-    mov eax, fileHandle
+    mov  eax, fileHandle
     call CloseFile
 
 no_file:
     ; Now display the data
-    mov eax, cyan + (black * 16)
+    mov  eax, cyan + (black * 16)
     call SetTextColor
 
-    mov edx, OFFSET LEADERBOARD_Line1
+    mov  edx, OFFSET LEADERBOARD_Line1
     call WriteString
     call Crlf
-    mov edx, OFFSET LEADERBOARD_Line2
+    mov  edx, OFFSET LEADERBOARD_Line2
     call WriteString
     call Crlf
-    mov edx, OFFSET LEADERBOARD_Line3
+    mov  edx, OFFSET LEADERBOARD_Line3
     call WriteString
     call Crlf
-    mov edx, OFFSET LEADERBOARD_Line4
+    mov  edx, OFFSET LEADERBOARD_Line4
     call WriteString
     call Crlf
-    mov edx, OFFSET LEADERBOARD_Line5
+    mov  edx, OFFSET LEADERBOARD_Line5
     call WriteString
     call Crlf
     call Crlf
 
     ; Check if leaderboard is empty
     cmp LeaderBoardCount, 0
-    je no_scores
+    je  no_scores
 
-    mov eax, white + (black * 16)
+    mov  eax, white + (black * 16)
     call SetTextColor
 
     ; Display only actual entries
@@ -949,57 +1007,57 @@ no_file:
     mov esi, 0
 score_loop:
     ; Display rank number
-    mov eax, esi
-    inc eax
+    mov  eax, esi
+    inc  eax
     call WriteDec
-    mov al, '.'
+    mov  al,  '.'
     call WriteChar
-    mov al, ' '
+    mov  al,  ' '
     call WriteChar
 
     ; Display name
-    mov eax, esi
-    mov ebx, 20
-    mul ebx
-    mov edx, OFFSET LeaderBoardNames
-    add edx, eax
+    mov  eax, esi
+    mov  ebx, 20
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardNames
+    add  edx, eax
     call WriteString
 
     ; Add spacing
-    mov al, ' '
+    mov  al, ' '
     call WriteChar
     call WriteChar
     call WriteChar
     call WriteChar
 
     ; Display score
-    mov eax, esi
-    mov ebx, 4
-    mul ebx
-    mov edx, OFFSET LeaderBoardScores
-    add edx, eax
-    mov eax, [edx]
+    mov  eax, esi
+    mov  ebx, 4
+    mul  ebx
+    mov  edx, OFFSET LeaderBoardScores
+    add  edx, eax
+    mov  eax, [edx]
     call WriteDec
     call Crlf
 
-    inc esi
+    inc  esi
     loop score_loop
-    jmp done_display
+    jmp  done_display
 
 no_scores:
-    mov eax, Red + (black * 16)
+    mov  eax, Red + (black * 16)
     call SetTextColor
     call Crlf
     call Crlf
-    mov edx, OFFSET leaderboardMsg
+    mov  edx, OFFSET leaderboardMsg
     call WriteString
 
 done_display:
-    mov eax, White + (black * 16)
+    mov  eax, White + (black * 16)
     call SetTextColor
     call Crlf
     call Crlf
-    mov edx, OFFSET pressAnyKey
+    mov  edx, OFFSET pressAnyKey
     call WriteString
     call ReadChar
     ret
@@ -1079,6 +1137,198 @@ WaitForKey ENDP
 
 
 
+; =============================================
+; Start Game - Draw Wide 20x20 Board Outline
+; =============================================
+start_game PROC
+    call Clrscr
+    call DrawBoardOutline
+    ret
+start_game ENDP
+
+; =============================================
+; Draw Board Outline - Wide 20x20 grid with border
+; =============================================
+DrawBoardOutline PROC
+    ; Display title
+    mov dh, 1
+    mov dl, 15
+    call Gotoxy
+    mov eax, yellow + (black * 16)
+    call SetTextColor
+    mov edx, OFFSET boardTitle
+    call WriteString
+    
+    ; Draw top border
+    mov dh, 3
+    mov dl, 15
+    call Gotoxy
+    mov eax, white + (black * 16)
+    call SetTextColor
+    
+    mov al, 201    ; Top-left corner ╔
+    call WriteChar
+    
+    mov ecx, 40    ; Double width (20 cells × 2 width)
+    mov al, 205    ; Horizontal line ═
+draw_top:
+    call WriteChar
+    loop draw_top
+    
+    mov al, 187    ; Top-right corner ╗
+    call WriteChar
+    
+    ; Draw rows
+    mov ecx, 20    ; 20 rows
+    mov dh, 4      ; Start at row 4
+    
+draw_rows:
+    push ecx
+    push edx
+    
+    ; Left border
+    call Gotoxy
+    mov al, 186    ; Vertical line ║
+    call WriteChar
+    
+    ; Grid cells - double width spaces
+    mov dl, 16     ; Move right 1 column
+    mov ecx, 40    ; 40 columns for double width
+    
+draw_columns:
+    call Gotoxy
+    mov al, ' '    ; Space for road
+    call WriteChar
+    inc dl
+    loop draw_columns
+    
+    ; Right border
+    call Gotoxy
+    mov al, 186    ; Vertical line ║
+    call WriteChar
+    
+    pop edx
+    inc dh         ; Next row
+    pop ecx
+    loop draw_rows
+    
+    ; Draw bottom border
+    mov dh, 24     ; 3 + 20 + 1 = 24
+    mov dl, 15
+    call Gotoxy
+    
+    mov al, 200    ; Bottom-left corner ╚
+    call WriteChar
+    
+    mov ecx, 40
+    mov al, 205    ; Horizontal line ═
+draw_bottom:
+    call WriteChar
+    loop draw_bottom
+    
+    mov al, 188    ; Bottom-right corner ╝
+    call WriteChar
+    
+    ; Add coordinate labels
+    mov eax, cyan + (black * 16)
+    call SetTextColor
+    
+    ; Column numbers (top) - A to T
+    mov dh, 2
+    mov dl, 17
+    mov ecx, 20
+    mov bl, 'A'
+    
+draw_col_labels:
+    call Gotoxy
+    mov al, bl
+    call WriteChar
+    inc bl
+    add dl, 2      ; Skip 2 columns for double width
+    loop draw_col_labels
+    
+    ; Row numbers (left side) - 1 to 20
+    mov dh, 4
+    mov dl, 13
+    mov ecx, 20
+    mov eax, 1
+    
+draw_row_labels:
+    push eax
+    call Gotoxy
+    call WriteDec
+    pop eax
+    inc eax
+    inc dh
+    loop draw_row_labels
+    
+    ; Add sample game elements
+    mov eax, green + (black * 16)
+    mov dh, 5
+    mov dl, 20
+    call Gotoxy
+    mov al, 'P'    ; Passenger
+    call WriteChar
+    inc dl
+    mov al, ' '    ; Second half of double width
+    call WriteChar
+    
+    mov eax, red + (black * 16)
+    mov dh, 10
+    mov dl, 40
+    call Gotoxy
+    mov al, 'T'    ; Taxi
+    call WriteChar
+    inc dl
+    mov al, ' '
+    call WriteChar
+    
+    mov eax, lightGray + (black * 16)
+    mov dh, 15
+    mov dl, 60
+    call Gotoxy
+    mov al, 'C'    ; Car
+    call WriteChar
+    inc dl
+    mov al, ' '
+    call WriteChar
+    
+    mov eax, blue + (black * 16)
+    mov dh, 20
+    mov dl, 30
+    call Gotoxy
+    mov al, 178    ; Building ▓
+    call WriteChar
+    inc dl
+    mov al, 178    ; Second half of building
+    call WriteChar
+    
+    ; Display legend
+    mov eax, white + (black * 16)
+    mov dh, 26
+    mov dl, 15
+    call Gotoxy
+    mov edx, OFFSET legendMsg
+    call WriteString
+    
+    ; Display instructions
+    mov dh, 28
+    mov dl, 15
+    call Gotoxy
+    mov edx, OFFSET pressAnyKey
+    call WriteString
+    call ReadChar
+    
+    ret
+
+
+DrawBoardOutline ENDP
+
+
+
+
+
+
 
 
 
@@ -1106,74 +1356,74 @@ CreateTestLeaderboard PROC
     mov LeaderBoardCount, 10
     
     ; Entry 1: "Player1" + score 9500
-    mov esi, OFFSET testName1
-    mov edi, OFFSET LeaderBoardNames
-    mov ecx, LENGTHOF testName1
+    mov  esi,                               OFFSET testName1
+    mov  edi,                               OFFSET LeaderBoardNames
+    mov  ecx,                               LENGTHOF testName1
     call CopyString
-    mov dword ptr [LeaderBoardScores + 0], 9500
+    mov  dword ptr [LeaderBoardScores + 0], 9500
     
     ; Entry 2: "ProGamer" + score 8200
-    mov esi, OFFSET testName2
-    mov edi, OFFSET LeaderBoardNames + 20
-    mov ecx, LENGTHOF testName2
+    mov  esi,                               OFFSET testName2
+    mov  edi,                               OFFSET LeaderBoardNames + 20
+    mov  ecx,                               LENGTHOF testName2
     call CopyString
-    mov dword ptr [LeaderBoardScores + 4], 8200
+    mov  dword ptr [LeaderBoardScores + 4], 8200
     
     ; Entry 3: "TaxiDriver" + score 7500
-    mov esi, OFFSET testName3
-    mov edi, OFFSET LeaderBoardNames + 40
-    mov ecx, LENGTHOF testName3
+    mov  esi,                               OFFSET testName3
+    mov  edi,                               OFFSET LeaderBoardNames + 40
+    mov  ecx,                               LENGTHOF testName3
     call CopyString
-    mov dword ptr [LeaderBoardScores + 8], 7500
+    mov  dword ptr [LeaderBoardScores + 8], 7500
     
     ; Entry 4: "SpeedRacer" + score 6800
-    mov esi, OFFSET testName4
-    mov edi, OFFSET LeaderBoardNames + 60
-    mov ecx, LENGTHOF testName4
+    mov  esi,                                OFFSET testName4
+    mov  edi,                                OFFSET LeaderBoardNames + 60
+    mov  ecx,                                LENGTHOF testName4
     call CopyString
-    mov dword ptr [LeaderBoardScores + 12], 6800
+    mov  dword ptr [LeaderBoardScores + 12], 6800
     
     ; Entry 5: "NewPlayer" + score 5500
-    mov esi, OFFSET testName5
-    mov edi, OFFSET LeaderBoardNames + 80
-    mov ecx, LENGTHOF testName5
+    mov  esi,                                OFFSET testName5
+    mov  edi,                                OFFSET LeaderBoardNames + 80
+    mov  ecx,                                LENGTHOF testName5
     call CopyString
-    mov dword ptr [LeaderBoardScores + 16], 5500
+    mov  dword ptr [LeaderBoardScores + 16], 5500
     
     ; Entry 6: "RushMaster" + score 4800
-    mov esi, OFFSET testName6
-    mov edi, OFFSET LeaderBoardNames + 100
-    mov ecx, LENGTHOF testName6
+    mov  esi,                                OFFSET testName6
+    mov  edi,                                OFFSET LeaderBoardNames + 100
+    mov  ecx,                                LENGTHOF testName6
     call CopyString
-    mov dword ptr [LeaderBoardScores + 20], 4800
+    mov  dword ptr [LeaderBoardScores + 20], 4800
     
     ; Entry 7: "CityRacer" + score 4200
-    mov esi, OFFSET testName7
-    mov edi, OFFSET LeaderBoardNames + 120
-    mov ecx, LENGTHOF testName7
+    mov  esi,                                OFFSET testName7
+    mov  edi,                                OFFSET LeaderBoardNames + 120
+    mov  ecx,                                LENGTHOF testName7
     call CopyString
-    mov dword ptr [LeaderBoardScores + 24], 4200
+    mov  dword ptr [LeaderBoardScores + 24], 4200
     
     ; Entry 8: "FastTaxi" + score 3800
-    mov esi, OFFSET testName8
-    mov edi, OFFSET LeaderBoardNames + 140
-    mov ecx, LENGTHOF testName8
+    mov  esi,                                OFFSET testName8
+    mov  edi,                                OFFSET LeaderBoardNames + 140
+    mov  ecx,                                LENGTHOF testName8
     call CopyString
-    mov dword ptr [LeaderBoardScores + 28], 3800
+    mov  dword ptr [LeaderBoardScores + 28], 3800
     
     ; Entry 9: "RoadKing" + score 3200
-    mov esi, OFFSET testName9
-    mov edi, OFFSET LeaderBoardNames + 160
-    mov ecx, LENGTHOF testName9
+    mov  esi,                                OFFSET testName9
+    mov  edi,                                OFFSET LeaderBoardNames + 160
+    mov  ecx,                                LENGTHOF testName9
     call CopyString
-    mov dword ptr [LeaderBoardScores + 32], 3200
+    mov  dword ptr [LeaderBoardScores + 32], 3200
     
     ; Entry 10: "Beginner" + score 2500
-    mov esi, OFFSET testName10
-    mov edi, OFFSET LeaderBoardNames + 180
-    mov ecx, LENGTHOF testName10
+    mov  esi,                                OFFSET testName10
+    mov  edi,                                OFFSET LeaderBoardNames + 180
+    mov  ecx,                                LENGTHOF testName10
     call CopyString
-    mov dword ptr [LeaderBoardScores + 36], 2500
+    mov  dword ptr [LeaderBoardScores + 36], 2500
     
     ; Now save to file
     call saveLeaderBoard
@@ -1184,13 +1434,13 @@ CreateTestLeaderboard PROC
 InitializeLeaderboardArrays PROC
     ; Initialize names array with zeros
     mov edi, OFFSET LeaderBoardNames
-    mov ecx, 200  ; 10 entries × 20 bytes
-    mov al, 0
+    mov ecx, 200                     ; 10 entries × 20 bytes
+    mov al,  0
     rep stosb
     
     ; Initialize scores array with zeros
     mov edi, OFFSET LeaderBoardScores
-    mov ecx, 10   ; 10 entries
+    mov ecx, 10                       ; 10 entries
     mov eax, 0
     rep stosd
     
@@ -1198,23 +1448,23 @@ InitializeLeaderboardArrays PROC
 InitializeLeaderboardArrays ENDP
 
 ; Test data - 10 entries
-testName1  BYTE "Player1",0
-testName2  BYTE "ProGamer",0  
-testName3  BYTE "TaxiDriver",0
-testName4  BYTE "SpeedRacer",0
-testName5  BYTE "NewPlayer",0
-testName6  BYTE "RushMaster",0
-testName7  BYTE "CityRacer",0
-testName8  BYTE "FastTaxi",0
-testName9  BYTE "RoadKing",0
-testName10 BYTE "Beginner",0
+testName1                   BYTE "Player1",    0
+testName2                   BYTE "ProGamer",   0
+testName3                   BYTE "TaxiDriver", 0
+testName4                   BYTE "SpeedRacer", 0
+testName5                   BYTE "NewPlayer",  0
+testName6                   BYTE "RushMaster", 0
+testName7                   BYTE "CityRacer",  0
+testName8                   BYTE "FastTaxi",   0
+testName9                   BYTE "RoadKing",   0
+testName10                  BYTE "Beginner",   0
 
-CreateTestLeaderboard ENDP
-
-
+CreateTestLeaderboard       ENDP
 
 
 
 
 
-END        main
+
+
+END                         main
