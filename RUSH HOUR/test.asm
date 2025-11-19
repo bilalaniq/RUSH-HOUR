@@ -647,13 +647,224 @@ close_file_save:
     mov  eax, fileHandle
     call CloseFile
     ret
-saveLeaderBoard    ENDP
+saveLeaderBoard ENDP
+
+
+; =============================================
+; Swap Names
+; Input: EDI = first name address, ESI = second name address
+; =============================================
+SwapNames       PROC
+    pushad         ; Save ALL general-purpose registers to stack
+    mov    ecx, 20 ; Set counter to 20 (names are 20 bytes each)
+swap_loop:
+    mov   al,    [edi] ; Load byte from first name into AL
+    mov   bl,    [esi] ; Load byte from second name into BL
+    mov   [edi], bl    ; Store byte from BL into first name
+    mov   [esi], al    ; Store byte from AL into second name
+    inc   edi          ; Move to next byte in first name
+    inc   esi          ; Move to next byte in second name
+    loop  swap_loop    ; Decrement ECX and loop until ECX = 0
+    popad              ; Restore ALL general-purpose registers from stack
+    ret
+SwapNames  ENDP
+
+; =============================================
+; Copy String
+; Input: ESI = source, EDI = destination, ECX = count
+; =============================================
+CopyString PROC
+    push esi ; Save original ESI value to stack
+    push edi ; Save original EDI value to stack  
+    push ecx ; Save original ECX value to stack
+    cld      ; Clear Direction Flag (DF=0) - move forward in memory
+
+    rep movsb ; Repeat MOVe String Byte: copy ECX bytes from [ESI] to [EDI]
+    ; movsb = "Move String Byte" - Copies 1 byte from [ESI] to [EDI], then increments both ESI and EDI
+    ; rep = "Repeat" - Repeats movsb ECX times (decrementing ECX each time until ECX=0)
+
+    pop ecx ; Restore original ECX from stack
+    pop edi ; Restore original EDI from stack
+    pop esi ; Restore original ESI from stack
+    ret     ; Return to caller
+CopyString            ENDP
+
+
+
+; =============================================
+; Add Score to Leaderboard
+; Input: EAX = score, EDX = player name address
+; =============================================
+AddScoreToLeaderboard PROC
+    push eax
+    push edx
+    
+    cmp LeaderBoardCount, 10
+    jb  add_new_score
+
+    ; Check if new score is higher than lowest score
+    mov esi, 9
+    mov eax, esi
+    mov ecx, 4
+    mul ecx
+    mov ebx, OFFSET LeaderBoardScores
+    add ebx, eax                      ; EBX = address of score[9]
+    mov ecx, [ebx]                    ; ECX = lowest score value
+    
+    ; Restore and compare
+    pop  edx
+    pop  eax
+    push eax
+    push edx
+    
+    cmp eax, ecx ; Compare new score with lowest
+    jbe no_add
+
+    ; Replace lowest score
+    mov  esi, 9
+    ; Copy name
+    mov  eax, esi
+    mov  ebx, 20
+    mul  ebx                          ; EAX = 9 × 20 = 180
+    mov  edi, OFFSET LeaderBoardNames
+    add  edi, eax
+    mov  esi, edx                     ; Source name
+    mov  ecx, 20
+    call CopyString                   ; Copy new name
+    
+    ; Store score
+    mov  esi,   9
+    mov  eax,   esi
+    mov  ebx,   4
+    mul  ebx
+    mov  edi,   OFFSET LeaderBoardScores
+    add  edi,   eax                      ; EDI = address of score[9]
+    pop  eax
+    push eax
+    mov  [edi], eax                      ; Store new score
+    jmp  sort_scores
+
+add_new_score:
+    ; Add to end
+    mov  esi, LeaderBoardCount
+    ; Copy name
+    mov  eax, esi
+    mov  ebx, 20
+    mul  ebx
+    mov  edi, OFFSET LeaderBoardNames
+    add  edi, eax
+    mov  esi, edx                     ; Source name
+    mov  ecx, 20
+    call CopyString
+    
+    ; Store score
+    mov  esi,   LeaderBoardCount
+    mov  eax,   esi
+    mov  ebx,   4
+    mul  ebx
+    mov  edi,   OFFSET LeaderBoardScores
+    add  edi,   eax
+    pop  eax
+    push eax
+    mov  [edi], eax
+    
+    inc LeaderBoardCount
+
+sort_scores:
+    ; Simple bubble sort for leaderboard (highest first)
+    mov ecx, LeaderBoardCount
+    dec ecx
+    jz  save_leaderboard      ; If only 1 entry, no sort needed
+
+outer_loop:
+    push ecx
+    mov  esi, 0 ; ESI = inner loop index (i)
+inner_loop:
+    ; Get current score (scores[i])
+    mov eax, esi                      ; EAX = current index
+    mov ebx, 4
+    mul ebx
+    mov edi, OFFSET LeaderBoardScores
+    add edi, eax                      ; EDI = address of scores[i]
+    mov eax, [edi]                    ; EAX = scores[i]
+    
+    ; Get next score (scores[i+1])
+    mov  ebx, esi
+    inc  ebx                           ; EBX = next index (i+1)
+    push eax                           ; Save scores[i]
+    mov  eax, ebx                      ; EAX = next index
+    mov  ebx, 4
+    mul  ebx                           ; EAX = (i+1) × 4
+    mov  edi, OFFSET LeaderBoardScores
+    add  edi, eax
+    mov  ebx, [edi]                    ; EBX = value of scores[i+1]
+    pop  eax                           ; Restore scores[i]
+    
+    cmp eax, ebx ; Compare scores[i] with scores[i+1]
+    jae no_swap  ; If scores[i] >= scores[i+1], no swap needed
+                       ; This means we want DESCENDING order
+
+    ; Swap scores
+    push eax                             ; Save scores[i]
+    push ebx                             ; Save scores[i+1]
+    mov  eax,   esi                      ; Current index
+    mov  ebx,   4
+    mul  ebx
+    mov  edi,   OFFSET LeaderBoardScores
+    add  edi,   eax                      ; EDI = address of scores[i]
+    pop  ebx                             ; Restore scores[i+1]
+    mov  [edi], ebx                      ; Store scores[i+1] in scores[i]
+    
+    mov eax,   esi
+    inc eax
+    mov ebx,   4
+    mul ebx
+    mov edi,   OFFSET LeaderBoardScores
+    add edi,   eax
+    pop eax                             ; Restore scores[i]
+    mov [edi], eax                      ; Store scores[i] in scores[i+1]
+
+    ; Swap names - FIXED: Save and restore ESI properly
+    push esi                          ; Save current index
+    mov  eax, esi
+    mov  ebx, 20
+    mul  ebx
+    mov  edi, OFFSET LeaderBoardNames
+    add  edi, eax
+    
+    mov eax, esi
+    inc eax
+    mov ebx, 20
+    mul ebx
+    mov esi, OFFSET LeaderBoardNames
+    add esi, eax
+    
+    call SwapNames
+    pop  esi       ; Restore current index
+
+no_swap:
+    inc esi
+    cmp esi, ecx
+    jb  inner_loop
+    
+    pop ecx
+    dec ecx
+    jnz outer_loop
+
+save_leaderboard:
+    call saveLeaderBoard
+
+no_add:
+    pop edx
+    pop eax
+    ret
+AddScoreToLeaderboard ENDP
 
 
 ; =============================================
 ; Display Leaderboard
 ; =============================================
-DisplayLeaderboard PROC
+DisplayLeaderboard    PROC
     call Clrscr
 
     mov  eax, cyan + (black * 16)
