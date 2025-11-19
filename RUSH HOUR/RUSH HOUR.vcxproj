@@ -19,7 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="main.asm">
+    <MASM Include="test.asm">
       <IncludePaths Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">C:\irvine;%(IncludePaths)</IncludePaths>
       <IncludePaths Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">C:\irvine;%(IncludePaths)</IncludePaths>
       <IncludePaths Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\irvine;%(IncludePaths)</IncludePaths>
