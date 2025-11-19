@@ -109,6 +109,7 @@ INCLUDELIB user32.lib
 
 .code
 main PROC
+    call CreateTestLeaderboard
     call MainMenu
     exit
 main     ENDP
@@ -860,104 +861,149 @@ no_add:
     ret
 AddScoreToLeaderboard ENDP
 
-
 ; =============================================
 ; Display Leaderboard
 ; =============================================
-DisplayLeaderboard    PROC
+DisplayLeaderboard PROC
     call Clrscr
 
-    mov  eax, cyan + (black * 16)
+    ; Load leaderboard data first
+    mov edx, OFFSET highscoresFile
+    call OpenInputFile
+    mov fileHandle, eax
+
+    cmp fileHandle, INVALID_HANDLE_VALUE
+    je no_file
+
+    ; Read the count
+    mov edx, OFFSET LeaderBoardCount
+    mov ecx, SIZEOF LeaderBoardCount
+    call ReadFromFile
+
+    ; Read the actual data
+    mov ecx, LeaderBoardCount
+    cmp ecx, 0
+    je close_display_file
+
+    mov esi, 0
+read_display_loop:
+    ; Read name
+    mov eax, esi
+    mov ebx, 20
+    mul ebx
+    mov edx, OFFSET LeaderBoardNames
+    add edx, eax
+    mov eax, fileHandle
+    mov ecx, 20
+    call ReadFromFile
+
+    ; Read score
+    mov eax, esi
+    mov ebx, 4
+    mul ebx
+    mov edx, OFFSET LeaderBoardScores
+    add edx, eax
+    mov eax, fileHandle
+    mov ecx, 4
+    call ReadFromFile
+
+    inc esi
+    cmp esi, LeaderBoardCount
+    jb read_display_loop
+
+close_display_file:
+    mov eax, fileHandle
+    call CloseFile
+
+no_file:
+    ; Now display the data
+    mov eax, cyan + (black * 16)
     call SetTextColor
 
-    mov  edx, OFFSET LEADERBOARD_Line1
+    mov edx, OFFSET LEADERBOARD_Line1
     call WriteString
     call Crlf
-    mov  edx, OFFSET LEADERBOARD_Line2
+    mov edx, OFFSET LEADERBOARD_Line2
     call WriteString
     call Crlf
-    mov  edx, OFFSET LEADERBOARD_Line3
+    mov edx, OFFSET LEADERBOARD_Line3
     call WriteString
     call Crlf
-    mov  edx, OFFSET LEADERBOARD_Line4
+    mov edx, OFFSET LEADERBOARD_Line4
     call WriteString
     call Crlf
-    mov  edx, OFFSET LEADERBOARD_Line5
+    mov edx, OFFSET LEADERBOARD_Line5
     call WriteString
     call Crlf
     call Crlf
 
     ; Check if leaderboard is empty
     cmp LeaderBoardCount, 0
-    je  no_scores
+    je no_scores
 
-    mov  eax, white + (black * 16)
+    mov eax, white + (black * 16)
     call SetTextColor
 
+    ; Display only actual entries
     mov ecx, LeaderBoardCount
     mov esi, 0
 score_loop:
     ; Display rank number
-    mov  eax, esi
-    inc  eax
+    mov eax, esi
+    inc eax
     call WriteDec
-    mov  al,  '.'
+    mov al, '.'
     call WriteChar
-    mov  al,  ' '
+    mov al, ' '
     call WriteChar
 
     ; Display name
-    mov  eax, esi
-    mov  ebx, 20
-    mul  ebx
-    mov  edx, OFFSET LeaderBoardNames
-    add  edx, eax
+    mov eax, esi
+    mov ebx, 20
+    mul ebx
+    mov edx, OFFSET LeaderBoardNames
+    add edx, eax
     call WriteString
 
-    ; Add spaces for alignment (fixed number for now)
-    mov ecx, 15
-space_loop:
-    mov  al, ' '
+    ; Add spacing
+    mov al, ' '
     call WriteChar
-    loop space_loop
+    call WriteChar
+    call WriteChar
+    call WriteChar
 
-    ; Display score (manual calculation)
-    mov  eax, esi
-    mov  ebx, 4
-    mul  ebx
-    mov  edx, OFFSET LeaderBoardScores
-    add  edx, eax
-    mov  eax, [edx]                    ; Get the score value
+    ; Display score
+    mov eax, esi
+    mov ebx, 4
+    mul ebx
+    mov edx, OFFSET LeaderBoardScores
+    add edx, eax
+    mov eax, [edx]
     call WriteDec
     call Crlf
 
-    inc  esi
+    inc esi
     loop score_loop
-    jmp  done_display
+    jmp done_display
 
 no_scores:
-    mov  eax, Red + (black * 16)
+    mov eax, Red + (black * 16)
     call SetTextColor
     call Crlf
     call Crlf
-    mov  edx, OFFSET leaderboardMsg
+    mov edx, OFFSET leaderboardMsg
     call WriteString
-    mov  eax, White + (black * 16)
-    call SetTextColor
-    call Crlf
 
 done_display:
+    mov eax, White + (black * 16)
+    call SetTextColor
     call Crlf
-    mov  edx, OFFSET pressAnyKey
+    call Crlf
+    mov edx, OFFSET pressAnyKey
     call WriteString
     call ReadChar
     ret
 DisplayLeaderboard ENDP
-
-
-
-
-
 
 
 
@@ -1029,5 +1075,146 @@ WaitForKey PROC
     call ReadChar
     ret
 WaitForKey ENDP
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+; =============================================
+; Test Program to Create Leaderboard File - FIXED VERSION (10 entries)
+; =============================================
+CreateTestLeaderboard PROC
+    ; First, initialize the arrays in memory
+    call InitializeLeaderboardArrays
+    
+    ; Then set up test data in memory
+    mov LeaderBoardCount, 10
+    
+    ; Entry 1: "Player1" + score 9500
+    mov esi, OFFSET testName1
+    mov edi, OFFSET LeaderBoardNames
+    mov ecx, LENGTHOF testName1
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 0], 9500
+    
+    ; Entry 2: "ProGamer" + score 8200
+    mov esi, OFFSET testName2
+    mov edi, OFFSET LeaderBoardNames + 20
+    mov ecx, LENGTHOF testName2
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 4], 8200
+    
+    ; Entry 3: "TaxiDriver" + score 7500
+    mov esi, OFFSET testName3
+    mov edi, OFFSET LeaderBoardNames + 40
+    mov ecx, LENGTHOF testName3
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 8], 7500
+    
+    ; Entry 4: "SpeedRacer" + score 6800
+    mov esi, OFFSET testName4
+    mov edi, OFFSET LeaderBoardNames + 60
+    mov ecx, LENGTHOF testName4
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 12], 6800
+    
+    ; Entry 5: "NewPlayer" + score 5500
+    mov esi, OFFSET testName5
+    mov edi, OFFSET LeaderBoardNames + 80
+    mov ecx, LENGTHOF testName5
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 16], 5500
+    
+    ; Entry 6: "RushMaster" + score 4800
+    mov esi, OFFSET testName6
+    mov edi, OFFSET LeaderBoardNames + 100
+    mov ecx, LENGTHOF testName6
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 20], 4800
+    
+    ; Entry 7: "CityRacer" + score 4200
+    mov esi, OFFSET testName7
+    mov edi, OFFSET LeaderBoardNames + 120
+    mov ecx, LENGTHOF testName7
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 24], 4200
+    
+    ; Entry 8: "FastTaxi" + score 3800
+    mov esi, OFFSET testName8
+    mov edi, OFFSET LeaderBoardNames + 140
+    mov ecx, LENGTHOF testName8
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 28], 3800
+    
+    ; Entry 9: "RoadKing" + score 3200
+    mov esi, OFFSET testName9
+    mov edi, OFFSET LeaderBoardNames + 160
+    mov ecx, LENGTHOF testName9
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 32], 3200
+    
+    ; Entry 10: "Beginner" + score 2500
+    mov esi, OFFSET testName10
+    mov edi, OFFSET LeaderBoardNames + 180
+    mov ecx, LENGTHOF testName10
+    call CopyString
+    mov dword ptr [LeaderBoardScores + 36], 2500
+    
+    ; Now save to file
+    call saveLeaderBoard
+    
+    ret
+
+; Helper procedure to initialize arrays with zeros
+InitializeLeaderboardArrays PROC
+    ; Initialize names array with zeros
+    mov edi, OFFSET LeaderBoardNames
+    mov ecx, 200  ; 10 entries × 20 bytes
+    mov al, 0
+    rep stosb
+    
+    ; Initialize scores array with zeros
+    mov edi, OFFSET LeaderBoardScores
+    mov ecx, 10   ; 10 entries
+    mov eax, 0
+    rep stosd
+    
+    ret
+InitializeLeaderboardArrays ENDP
+
+; Test data - 10 entries
+testName1  BYTE "Player1",0
+testName2  BYTE "ProGamer",0  
+testName3  BYTE "TaxiDriver",0
+testName4  BYTE "SpeedRacer",0
+testName5  BYTE "NewPlayer",0
+testName6  BYTE "RushMaster",0
+testName7  BYTE "CityRacer",0
+testName8  BYTE "FastTaxi",0
+testName9  BYTE "RoadKing",0
+testName10 BYTE "Beginner",0
+
+CreateTestLeaderboard ENDP
+
+
+
+
+
+
 
 END        main

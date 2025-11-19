@@ -26,6 +26,9 @@
       <IncludePaths Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\irvine;%(IncludePaths)</IncludePaths>
     </MASM>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="highscores.txt" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
