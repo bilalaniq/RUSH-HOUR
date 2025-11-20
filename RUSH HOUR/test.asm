@@ -1,19 +1,63 @@
 .386
-.model     flat, stdcall
-.stack     4096
+.model        flat,                                         stdcall
+.stack        4096
 
 ; =============================================
 ; Irvine32 Library Includes
 ; =============================================
-INCLUDE    Irvine32.inc
-INCLUDELIB Irvine32.lib
-INCLUDELIB kernel32.lib
-INCLUDELIB user32.lib
+INCLUDE       Irvine32.inc
+INCLUDELIB    Irvine32.lib
+INCLUDELIB    kernel32.lib
+INCLUDELIB    user32.lib
 
 ; =============================================
 ; .data
 ; =============================================
 .data
+
+
+xWall         BYTE 52 DUP("#"),                             0
+
+strScore      BYTE "Your score is: ",                       0
+score         BYTE 0
+
+strTryAgain   BYTE "Try Again?  1=yes, 0=no",               0
+invalidInput  BYTE "invalid input",                         0
+strYouDied    BYTE "you died ",                             0
+strPoints     BYTE " point(s)",                             0
+blank         BYTE "                                     ", 0
+
+; Represent the snake using only 'x' characters (single char per segment)
+snake         BYTE 200 DUP('x')
+
+
+;xPos BYTE 45,44,43,42,41, 100 DUP(?)
+;yPos BYTE 15,15,15,15,15, 100 DUP(?)
+
+xPos BYTE 15,14,13,12,11, 100 DUP(?)  ; Start at left boundary (X=11)
+yPos BYTE 15,15,15,15,15, 100 DUP(?)
+
+; Widened wall coordinates: increased right side X from 85 -> 96
+xPosWall BYTE 10,10,110,110			;position of upperLeft, lowerLeft, upperRight, lowerRignt wall 
+yPosWall BYTE 5,27,5,27
+
+xCoinPos      BYTE ?
+yCoinPos      BYTE ?
+
+inputChar     BYTE "+"                                                   ; + denotes the start of the game
+lastInputChar BYTE ?
+
+strSpeed      BYTE "Speed (1-fast, 2-medium, 3-slow): ",    0
+speed         DWORD 0
+
+
+
+
+
+
+
+
+
 
     legendMsg BYTE "Legend: P=Passenger  T=Taxi  C=Car  ▓=Building", 0
             
@@ -139,7 +183,6 @@ INCLUDELIB user32.lib
 
 .code
 main PROC
-    call CreateTestLeaderboard
     call MainMenu
     exit
 main     ENDP
@@ -311,9 +354,14 @@ ProcessMenuChoice PROC
     ret
 
 start_new_game:
-    call SelectTaxiScreen
-    call start_game
-    ret
+    ;call SelectTaxiScreen
+    ;call start_game
+    call Clrscr
+    call DrawWall			;draw walls
+	call DrawScoreboard		;draw scoreboard
+	call ChooseSpeed		;let player to choose Speed
+
+    jmp drawSnake		;start the game flow (draw snake and enter game loop)
     
 continue_game:
     call ContinueGameScreen
@@ -1137,329 +1185,601 @@ WaitForKey ENDP
 
 
 
-; =============================================
-; Start Game - Draw Wide 20x20 Board Outline
-; =============================================
-start_game PROC
-    call Clrscr
-    call DrawBoardOutline
-    ret
-start_game ENDP
 
-; =============================================
-; Draw Board Outline - Wide 20x20 grid with border
-; =============================================
-DrawBoardOutline PROC
-    ; Display title
-    mov dh, 1
-    mov dl, 15
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+drawSnake:
+    mov  esi, 0
+    mov  ecx, 1       ; draw only the head initially
+drawSnake_loop:
+    call DrawPlayer ; draw snake head only
+    inc  esi
+    loop drawSnake_loop
+
+    call Randomize
+    call CreateRandomCoin
+    call DrawCoin         ; set up finish
+
+    ; Start with default movement to the right so snake moves without initial keypress
+    mov  inputChar, 'd'
+    mov  lastInputChar, 'd'
+
+    gameLoop::
+		mov  dl, 106 ;move cursor to coordinates
+		mov  dh, 1
+		call Gotoxy
+
+		; get user key input
+        call ReadKey
+            jz   noKey                    ;jump if no key is entered
+        ; Handle extended (arrow) keys: first read returns 0, next returns scan code
+        cmp  al, 0
+        jne  processInput_normal
+        ; extended key - read second code
+        call ReadKey
+        ; map scan codes to WASD
+        cmp  al, 72    ; up arrow scan code
+        je   set_w
+        cmp  al, 80    ; down
+        je   set_s
+        cmp  al, 75    ; left
+        je   set_a
+        cmp  al, 77    ; right
+        je   set_d
+        jmp  processInput_normal
+
+set_w:
+        mov  al, 'w'
+        jmp  processInput_store
+
+set_s:
+        mov  al, 's'
+        jmp  processInput_store
+
+set_a:
+        mov  al, 'a'
+        jmp  processInput_store
+
+set_d:
+        mov  al, 'd'
+        jmp  processInput_store
+
+processInput_normal:
+        ; AL already contains normal key (ASCII)
+
+processInput_store:
+        mov  bl,            inputChar
+        mov  lastInputChar, bl
+        mov  inputChar,     al        ;assign variables
+
+		noKey:
+		cmp inputChar, "x"
+		je  exitgame       ;exit game if user input x
+
+		cmp inputChar, "w"
+		je  checkTop
+
+		cmp inputChar, "s"
+		je  checkBottom
+
+		cmp inputChar, "a"
+		je  checkLeft
+
+		cmp inputChar, "d"
+		je  checkRight
+		jne gameLoop       ; reloop if no meaningful key was entered
+
+
+		checkBottom:	
+    cmp lastInputChar, "w"
+    je  dontChgDirection
+    mov al, yPos[0]
+    inc al
+    cmp al, 26        ; Explicit bottom boundary (Y=26)
+    jl  moveDown
+    jge died
+
+checkLeft:		
+    cmp lastInputChar, "+"
+    je  dontGoLeft
+    cmp lastInputChar, "d"
+    je  dontChgDirection
+    mov al, xPos[0]
+    dec al
+    mov cl, xPosWall[0]
+    cmp al, cl
+    ja  moveLeft
+    je  died
+
+checkRight:		
+    cmp lastInputChar, "a"
+    je  dontChgDirection
+    mov al, xPos[0]
+    inc al
+    mov cl, xPosWall[2]
+    cmp al, cl
+    jb  moveRight
+    je  died
+
+checkTop:		
+    cmp lastInputChar, "s"
+    je  dontChgDirection
+    mov al, yPos[0]
+    dec al
+    mov cl, yPosWall[0]
+    cmp al, cl
+    ja  moveUp
+    je  died
+		
+		moveUp:		
+		mov  eax, speed     ;slow down the moving
+		add  eax, speed
+		call delay
+		mov  esi, 0         ;index 0(snake head)
+		call UpdatePlayer
+		mov  ah,  yPos[esi]
+		mov  al,  xPos[esi] ;alah stores the pos of the snake's next unit 
+		dec  yPos[esi]      ;move the head up
+		call DrawPlayer
+		call DrawBody
+		call CheckSnake
+
+		
+		moveDown:                ;move down
+		mov       eax, speed
+		add       eax, speed
+		call      delay
+		mov       esi, 0
+		call      UpdatePlayer
+		mov       ah,  yPos[esi]
+		mov       al,  xPos[esi]
+		inc       yPos[esi]
+		call      DrawPlayer
+		call      DrawBody
+		call      CheckSnake
+
+
+		moveLeft:                ;move left
+		mov       eax, speed
+		call      delay
+		mov       esi, 0
+		call      UpdatePlayer
+		mov       ah,  yPos[esi]
+		mov       al,  xPos[esi]
+		dec       xPos[esi]
+		call      DrawPlayer
+		call      DrawBody
+		call      CheckSnake
+
+
+		moveRight:                ;move right
+		mov        eax, speed
+		call       delay
+		mov        esi, 0
+		call       UpdatePlayer
+		mov        ah,  yPos[esi]
+		mov        al,  xPos[esi]
+		inc        xPos[esi]
+		call       DrawPlayer
+		call       DrawBody
+		call       CheckSnake
+
+	; getting points
+		checkcoin::
+		mov esi, 0
+		mov bl,  xPos[0]
+		cmp bl,  xCoinPos
+		jne gameloop      ;reloop if snake is not intersecting with coin
+		mov bl,  yPos[0]
+		cmp bl,  yCoinPos
+		jne gameloop      ;reloop if snake is not intersecting with coin
+
+		call EatingCoin ;call to update score, append snake and generate new coin	
+
+jmp gameLoop ;reiterate the gameloop
+
+
+	dontChgDirection:               ;dont allow user to change direction
+	mov               inputChar, bl ;set current inputChar as previous
+	jmp               noKey         ;jump back to continue moving the same direction 
+
+	dontGoLeft:                ;forbids the snake to go left at the begining of the game
+	mov         inputChar, "+" ;set current inputChar as "+"
+	jmp         gameLoop       ;restart the game loop
+
+	died::
+	call YouDied
+	 
+	playagn::			
+	call ReinitializeGame ;reinitialise everything
+	
+	exitgame::
+	exit
+ret
+
+
+DrawWall PROC           ;procedure to draw wall
+    ; Draw a box using box-drawing characters around the wall coordinates
+    ; Top-left corner
+    mov  dl, xPosWall[0]
+    mov  dh, yPosWall[0]
     call Gotoxy
-    mov eax, yellow + (black * 16)
-    call SetTextColor
-    mov edx, OFFSET boardTitle
-    call WriteString
-    
-    ; Draw top border
-    mov dh, 3
-    mov dl, 15
-    call Gotoxy
-    mov eax, white + (black * 16)
-    call SetTextColor
-    
-    mov al, 201    ; Top-left corner ╔
+    mov  al, 201  ; ╔
     call WriteChar
-    
-    mov ecx, 40    ; Double width (20 cells × 2 width)
-    mov al, 205    ; Horizontal line ═
+
+    ; Draw top horizontal line between left and right corners
+    movzx eax, xPosWall[2]
+    movzx ebx, xPosWall[0]
+    sub  eax, ebx
+    sub  eax, 1          ; number of horizontal chars between corners
+    mov  ecx, eax
+    mov  dl, xPosWall[0]
+    inc  dl
 draw_top:
+    call Gotoxy
+    mov  al, 205  ; ═
     call WriteChar
+    inc  dl
     loop draw_top
-    
-    mov al, 187    ; Top-right corner ╗
-    call WriteChar
-    
-    ; Draw rows
-    mov ecx, 20    ; 20 rows
-    mov dh, 4      ; Start at row 4
-    
-draw_rows:
-    push ecx
-    push edx
-    
-    ; Left border
+
+    ; Top-right corner
+    mov  dl, xPosWall[2]
+    mov  dh, yPosWall[0]
     call Gotoxy
-    mov al, 186    ; Vertical line ║
+    mov  al, 187  ; ╗
     call WriteChar
-    
-    ; Grid cells - double width spaces
-    mov dl, 16     ; Move right 1 column
-    mov ecx, 40    ; 40 columns for double width
-    
-draw_columns:
+
+    ; Draw vertical sides (rows) using BL as current row
+    movzx eax, yPosWall[0]
+    inc  al
+    mov  bl, al           ; current row
+    movzx eax, yPosWall[3]
+    dec  al
+    mov  bh, al           ; last row
+draw_rows_loop:
+    ; Left border at (xPosWall[0], bl)
+    mov  dl, xPosWall[0]
+    mov  dh, bl
     call Gotoxy
-    mov al, ' '    ; Space for road
+    mov  al, 186  ; ║
     call WriteChar
-    inc dl
-    loop draw_columns
-    
-    ; Right border
+
+    ; Right border at (xPosWall[2], bl)
+    mov  dl, xPosWall[2]
+    mov  dh, bl
     call Gotoxy
-    mov al, 186    ; Vertical line ║
+    mov  al, 186  ; ║
     call WriteChar
-    
-    pop edx
-    inc dh         ; Next row
-    pop ecx
-    loop draw_rows
-    
-    ; Draw bottom border
-    mov dh, 24     ; 3 + 20 + 1 = 24
-    mov dl, 15
+
+    inc  bl
+    cmp  bl, bh
+    jle  draw_rows_loop
+
+    ; Bottom-left corner
+    mov  dl, xPosWall[0]
+    mov  dh, yPosWall[3]
     call Gotoxy
-    
-    mov al, 200    ; Bottom-left corner ╚
+    mov  al, 200  ; ╚
     call WriteChar
-    
-    mov ecx, 40
-    mov al, 205    ; Horizontal line ═
+
+    ; Bottom horizontal
+    movzx eax, xPosWall[2]
+    movzx ebx, xPosWall[0]
+    sub  eax, ebx
+    sub  eax, 1
+    mov  ecx, eax
+    mov  dl, xPosWall[0]
+    inc  dl
 draw_bottom:
+    call Gotoxy
+    mov  al, 205  ; ═
     call WriteChar
+    inc  dl
     loop draw_bottom
-    
-    mov al, 188    ; Bottom-right corner ╝
-    call WriteChar
-    
-    ; Add coordinate labels
-    mov eax, cyan + (black * 16)
-    call SetTextColor
-    
-    ; Column numbers (top) - A to T
-    mov dh, 2
-    mov dl, 17
-    mov ecx, 20
-    mov bl, 'A'
-    
-draw_col_labels:
+
+    ; Bottom-right corner
+    mov  dl, xPosWall[2]
+    mov  dh, yPosWall[3]
     call Gotoxy
-    mov al, bl
+    mov  al, 188  ; ╝
     call WriteChar
-    inc bl
-    add dl, 2      ; Skip 2 columns for double width
-    loop draw_col_labels
-    
-    ; Row numbers (left side) - 1 to 20
-    mov dh, 4
-    mov dl, 13
-    mov ecx, 20
-    mov eax, 1
-    
-draw_row_labels:
-    push eax
-    call Gotoxy
-    call WriteDec
-    pop eax
-    inc eax
-    inc dh
-    loop draw_row_labels
-    
-    ; Add sample game elements
-    mov eax, green + (black * 16)
-    mov dh, 5
-    mov dl, 20
-    call Gotoxy
-    mov al, 'P'    ; Passenger
-    call WriteChar
-    inc dl
-    mov al, ' '    ; Second half of double width
-    call WriteChar
-    
-    mov eax, red + (black * 16)
-    mov dh, 10
-    mov dl, 40
-    call Gotoxy
-    mov al, 'T'    ; Taxi
-    call WriteChar
-    inc dl
-    mov al, ' '
-    call WriteChar
-    
-    mov eax, lightGray + (black * 16)
-    mov dh, 15
-    mov dl, 60
-    call Gotoxy
-    mov al, 'C'    ; Car
-    call WriteChar
-    inc dl
-    mov al, ' '
-    call WriteChar
-    
-    mov eax, blue + (black * 16)
-    mov dh, 20
-    mov dl, 30
-    call Gotoxy
-    mov al, 178    ; Building ▓
-    call WriteChar
-    inc dl
-    mov al, 178    ; Second half of building
-    call WriteChar
-    
-    ; Display legend
-    mov eax, white + (black * 16)
-    mov dh, 26
-    mov dl, 15
-    call Gotoxy
-    mov edx, OFFSET legendMsg
-    call WriteString
-    
-    ; Display instructions
-    mov dh, 28
-    mov dl, 15
-    call Gotoxy
-    mov edx, OFFSET pressAnyKey
-    call WriteString
-    call ReadChar
-    
+
     ret
+DrawWall       ENDP
 
 
-DrawBoardOutline ENDP
+DrawScoreboard PROC ;procedure to draw scoreboard
+	mov  dl,  2
+	mov  dh,  1
+	call Gotoxy
+	mov  edx, OFFSET strScore ;print string that indicates score
+	call WriteString
+	mov  eax, "0"
+	call WriteChar            ;scoreboard starts with 0
+	ret
+DrawScoreboard ENDP
 
 
+ChooseSpeed    PROC ;procedure for player to choose speed
+	mov  edx,   0
+	mov  dl,    71
+	mov  dh,    1
+	call Gotoxy
+	mov  edx,   OFFSET strSpeed ; prompt to enter integers (1,2,3)
+	call WriteString
+	mov  esi,   40              ; milisecond difference per speed level
+	mov  eax,   0
+	call readInt
+	cmp  ax,    1               ;input validation
+	jl   invalidspeed
+	cmp  ax,    3
+	jg   invalidspeed
+	mul  esi
+	mov  speed, eax             ;assign speed variable in mililiseconds
+	ret
 
+	invalidspeed:                          ;jump here if user entered an invalid number
+	mov           dl,  105
+	mov           dh,  1
+	call          Gotoxy
+	mov           edx, OFFSET invalidInput ;print error message		
+	call          WriteString
+	mov           ax,  1500
+	call          delay
+	mov           dl,  105
+	mov           dh,  1
+	call          Gotoxy
+	mov           edx, OFFSET blank        ;erase error message after 1.5 secs of delay
+	call          writeString
+	call          ChooseSpeed              ;call procedure for user to choose again
+	ret
+ChooseSpeed ENDP
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-; =============================================
-; Test Program to Create Leaderboard File - FIXED VERSION (10 entries)
-; =============================================
-CreateTestLeaderboard PROC
-    ; First, initialize the arrays in memory
-    call InitializeLeaderboardArrays
-    
-    ; Then set up test data in memory
-    mov LeaderBoardCount, 10
-    
-    ; Entry 1: "Player1" + score 9500
-    mov  esi,                               OFFSET testName1
-    mov  edi,                               OFFSET LeaderBoardNames
-    mov  ecx,                               LENGTHOF testName1
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 0], 9500
-    
-    ; Entry 2: "ProGamer" + score 8200
-    mov  esi,                               OFFSET testName2
-    mov  edi,                               OFFSET LeaderBoardNames + 20
-    mov  ecx,                               LENGTHOF testName2
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 4], 8200
-    
-    ; Entry 3: "TaxiDriver" + score 7500
-    mov  esi,                               OFFSET testName3
-    mov  edi,                               OFFSET LeaderBoardNames + 40
-    mov  ecx,                               LENGTHOF testName3
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 8], 7500
-    
-    ; Entry 4: "SpeedRacer" + score 6800
-    mov  esi,                                OFFSET testName4
-    mov  edi,                                OFFSET LeaderBoardNames + 60
-    mov  ecx,                                LENGTHOF testName4
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 12], 6800
-    
-    ; Entry 5: "NewPlayer" + score 5500
-    mov  esi,                                OFFSET testName5
-    mov  edi,                                OFFSET LeaderBoardNames + 80
-    mov  ecx,                                LENGTHOF testName5
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 16], 5500
-    
-    ; Entry 6: "RushMaster" + score 4800
-    mov  esi,                                OFFSET testName6
-    mov  edi,                                OFFSET LeaderBoardNames + 100
-    mov  ecx,                                LENGTHOF testName6
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 20], 4800
-    
-    ; Entry 7: "CityRacer" + score 4200
-    mov  esi,                                OFFSET testName7
-    mov  edi,                                OFFSET LeaderBoardNames + 120
-    mov  ecx,                                LENGTHOF testName7
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 24], 4200
-    
-    ; Entry 8: "FastTaxi" + score 3800
-    mov  esi,                                OFFSET testName8
-    mov  edi,                                OFFSET LeaderBoardNames + 140
-    mov  ecx,                                LENGTHOF testName8
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 28], 3800
-    
-    ; Entry 9: "RoadKing" + score 3200
-    mov  esi,                                OFFSET testName9
-    mov  edi,                                OFFSET LeaderBoardNames + 160
-    mov  ecx,                                LENGTHOF testName9
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 32], 3200
-    
-    ; Entry 10: "Beginner" + score 2500
-    mov  esi,                                OFFSET testName10
-    mov  edi,                                OFFSET LeaderBoardNames + 180
-    mov  ecx,                                LENGTHOF testName10
-    call CopyString
-    mov  dword ptr [LeaderBoardScores + 36], 2500
-    
-    ; Now save to file
-    call saveLeaderBoard
-    
+DrawPlayer  PROC ; draw player at (xPos,yPos)
+    mov  dl, xPos[esi]
+    mov  dh, yPos[esi]
+    call Gotoxy
+    mov  al, snake[esi]
+    call WriteChar
     ret
+DrawPlayer   ENDP
 
-; Helper procedure to initialize arrays with zeros
-InitializeLeaderboardArrays PROC
-    ; Initialize names array with zeros
-    mov edi, OFFSET LeaderBoardNames
-    mov ecx, 200                     ; 10 entries × 20 bytes
-    mov al,  0
-    rep stosb
-    
-    ; Initialize scores array with zeros
-    mov edi, OFFSET LeaderBoardScores
-    mov ecx, 10                       ; 10 entries
-    mov eax, 0
-    rep stosd
-    
+UpdatePlayer PROC ; erase player at (xPos,yPos)
+    mov  dl, xPos[esi]
+    mov  dh, yPos[esi]
+    call Gotoxy
+    mov  al, " "
+    call WriteChar
     ret
-InitializeLeaderboardArrays ENDP
+UpdatePlayer ENDP
 
-; Test data - 10 entries
-testName1                   BYTE "Player1",    0
-testName2                   BYTE "ProGamer",   0
-testName3                   BYTE "TaxiDriver", 0
-testName4                   BYTE "SpeedRacer", 0
-testName5                   BYTE "NewPlayer",  0
-testName6                   BYTE "RushMaster", 0
-testName7                   BYTE "CityRacer",  0
-testName8                   BYTE "FastTaxi",   0
-testName9                   BYTE "RoadKing",   0
-testName10                  BYTE "Beginner",   0
+DrawCoin     PROC ;procedure to draw coin
+	mov  eax, yellow (yellow * 16)
+	call SetTextColor              ;set color to yellow for coin
+	mov  dl,  xCoinPos
+	mov  dh,  yCoinPos
+	call Gotoxy
+	mov  al,  "X"
+	call WriteChar
+	mov  eax, white (black * 16)   ;reset color to black and white
+	call SetTextColor
+	ret
+DrawCoin         ENDP
 
-CreateTestLeaderboard       ENDP
+CreateRandomCoin PROC ;procedure to create a random coin
+    ; Generate X between (xPosWall[0]+1) .. (xPosWall[2]-1)
+    movzx ecx, xPosWall[2]
+    movzx ebx, xPosWall[0]
+    mov  eax, ecx
+    sub  eax, ebx
+    sub  eax, 1        ; W = right - left - 1
+    dec  eax           ; pass W-1 to RandomRange to get 0..W-1
+    call RandomRange
+    add  eax, ebx
+    inc  eax           ; now EAX in [left+1 .. right-1]
+    mov  xCoinPos, al
+
+    ; Generate Y between (yPosWall[0]+1) .. (yPosWall[3]-1)
+    movzx ecx, yPosWall[3]
+    movzx ebx, yPosWall[0]
+    mov  eax, ecx
+    sub  eax, ebx
+    sub  eax, 1
+    dec  eax
+    call RandomRange
+    add  eax, ebx
+    inc  eax
+    mov  yCoinPos, al
+
+    mov ecx, 5
+    add cl,  score ;loop number of snake unit
+    mov esi, 0
+checkCoinXPos:
+    movzx eax, xCoinPos
+    cmp   al,  xPos[esi]
+    je    checkCoinYPos  ;jump if xPos of snake at esi = xPos of coin
+continueloop:
+    inc   esi
+    loop checkCoinXPos
+    ret                    ; return when coin is not on snake
+checkCoinYPos:
+    movzx eax, yCoinPos
+    cmp   al,  yPos[esi]
+    jne   continueloop     ; jump back to continue loop if yPos of snake at esi != yPos of coin
+    call  CreateRandomCoin ; coin generated on snake, calling function again to create another set of coordinates
+CreateRandomCoin ENDP
+
+CheckSnake       PROC ;check whether the snake head collides w its body 
+	mov al,  xPos[0]
+	mov ah,  yPos[0]
+	mov esi, 4       ;start checking from index 4(5th unit)
+	mov ecx, 1
+	add cl,  score
+checkXposition:
+	cmp xPos[esi], al ;check if xpos same ornot
+	je  XposSame
+	contloop:
+	inc esi
+loop checkXposition
+	jmp       checkcoin
+	XposSame:               ; if xpos same, check for ypos
+	cmp       yPos[esi], ah
+	je        died          ;if collides, snake dies
+	jmp       contloop
+
+CheckSnake ENDP
+
+DrawBody   PROC ;procedure to print body of the snake
+        ; No body rendering - snake is represented by a single 'x' (head only)
+        ret
+DrawBody   ENDP
+
+EatingCoin PROC
+	; snake is eating coin
+	inc score
+	mov ebx,       4
+	add bl,        score
+	mov esi,       ebx
+	mov ah,        yPos[esi-1]
+	mov al,        xPos[esi-1]
+	mov xPos[esi], al          ;add one unit to the snake
+	mov yPos[esi], ah          ;pos of new tail = pos of old tail
+
+	cmp xPos[esi-2], al ;check if the old tail and the unit before is on the yAxis
+	jne checky          ;jump if not on the yAxis
+
+	cmp   yPos[esi-2], ah ;check if the new tail should be above or below of the old tail 
+	jl    incy
+	jg    decy
+	incy:                 ;inc if below
+	inc   yPos[esi]
+	jmp   continue
+	decy:                 ;dec if above
+	dec   yPos[esi]
+	jmp   continue
+
+	checky:                 ;old tail and the unit before is on the xAxis
+	cmp     yPos[esi-2], ah ;check if the new tail should be right or left of the old tail
+	jl      incx
+	jg      decx
+	incx:                   ;inc if right
+	inc     xPos[esi]
+	jmp     continue
+	decx:                   ;dec if left
+	dec     xPos[esi]
+
+	continue:                  ;add snake tail and update new coin
+	call      DrawPlayer
+	call      CreateRandomCoin
+	call      DrawCoin
+
+	mov  dl, 17    ; write updated score
+	mov  dh, 1
+	call Gotoxy
+	mov  al, score
+	call WriteInt
+	ret
+EatingCoin ENDP
+
+
+YouDied    PROC
+	mov  eax, 1000
+	call delay
+	Call ClrScr
+	
+	mov  dl,  57
+	mov  dh,  12
+	call Gotoxy
+	mov  edx, OFFSET strYouDied ;"you died"
+	call WriteString
+
+	mov   dl,  56
+	mov   dh,  14
+	call  Gotoxy
+	movzx eax, score
+	call  WriteInt
+	mov   edx, OFFSET strPoints ;display score
+	call  WriteString
+
+	mov  dl,  50
+	mov  dh,  18
+	call Gotoxy
+	mov  edx, OFFSET strTryAgain
+	call WriteString             ;"try again?"
+
+	retry:
+	mov  dh, 19
+	mov  dl, 56
+	call Gotoxy
+	call ReadInt  ;get user input
+	cmp  al, 1
+	je   playagn  ;playagn
+	cmp  al, 0
+	je   exitgame ;exitgame
+
+	mov  dh,  17
+	call Gotoxy
+	mov  edx, OFFSET invalidInput ;"Invalid input"
+	call WriteString
+	mov  dl,  56
+	mov  dh,  19
+	call Gotoxy
+	mov  edx, OFFSET blank        ;erase previous input
+	call WriteString
+	jmp  retry                    ;let user input again
+YouDied          ENDP
+
+ReinitializeGame PROC ;procedure to reinitialize everything
+	mov  xPos[0],       15
+    mov  xPos[1],       14
+    mov  xPos[2],       13
+    mov  xPos[3],       12
+    mov  xPos[4],       11  ; Start at left boundary (X=11)
+    mov  yPos[0],       15
+    mov  yPos[1],       15
+    mov  yPos[2],       15
+    mov  yPos[3],       15
+    mov  yPos[4],       15
+	mov  score,         0   ;reinitialize score
+	mov  lastInputChar, 0
+	mov  inputChar,     "+" ;reinitialize inputChar and lastInputChar
+    ; (Do not modify wall coordinates here) - keep wall size stable
+	Call ClrScr
+	jmp  main               ;start over the game
+ReinitializeGame ENDP
 
 
 
@@ -1467,4 +1787,19 @@ CreateTestLeaderboard       ENDP
 
 
 
-END                         main
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+END              main
