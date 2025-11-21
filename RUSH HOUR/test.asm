@@ -1,14 +1,14 @@
 .386
-.model        flat,                                         stdcall
-.stack        4096
+.model       flat,                                         stdcall
+.stack       4096
 
 ; =============================================
 ; Irvine32 Library Includes
 ; =============================================
-INCLUDE       Irvine32.inc
-INCLUDELIB    Irvine32.lib
-INCLUDELIB    kernel32.lib
-INCLUDELIB    user32.lib
+INCLUDE      Irvine32.inc
+INCLUDELIB   Irvine32.lib
+INCLUDELIB   kernel32.lib
+INCLUDELIB   user32.lib
 
 ; =============================================
 ; .data
@@ -16,50 +16,59 @@ INCLUDELIB    user32.lib
 .data
 
 
-xWall         BYTE 52 DUP("#"),                             0
+xWall        BYTE 52 DUP("#"),                             0
 
-strScore      BYTE "Your score is: ",                       0
-score         BYTE 0
+strScore     BYTE "Your score is: ",                       0
+score        BYTE 0
 
-strTryAgain   BYTE "Try Again?  1=yes, 0=no",               0
-invalidInput  BYTE "invalid input",                         0
-strYouDied    BYTE "you died ",                             0
-strPoints     BYTE " point(s)",                             0
-blank         BYTE "                                     ", 0
+strTryAgain  BYTE "Try Again?  1=yes, 0=no",               0
+invalidInput BYTE "invalid input",                         0
+strYouDied   BYTE "you died ",                             0
+strPoints    BYTE " point(s)",                             0
+blank        BYTE "                                     ", 0
 
-; Represent the snake using only 'x' characters (single char per segment)
-snake         BYTE 200 DUP('x')
+; Represent the car (player vehicle) using 'T' characters (single char per segment)
+car          BYTE 200 DUP('T')
 
 
 ;xPos BYTE 45,44,43,42,41, 100 DUP(?)
 ;yPos BYTE 15,15,15,15,15, 100 DUP(?)
 
-xPos BYTE 15,14,13,12,11, 100 DUP(?)  ; Start at left boundary (X=11)
-yPos BYTE 15,15,15,15,15, 100 DUP(?)
+; Keep only head position (single 'T' car)
+xPos         BYTE 15,                                      100 DUP(?) ; Head X (start near left boundary)
+yPos         BYTE 15,                                      100 DUP(?) ; Head Y
 
 ; Widened wall coordinates: increased right side X from 85 -> 96
 xPosWall BYTE 10,10,110,110			;position of upperLeft, lowerLeft, upperRight, lowerRignt wall 
 yPosWall BYTE 5,27,5,27
 
-xCoinPos      BYTE ?
-yCoinPos      BYTE ?
 
-inputChar     BYTE "+"                                                   ; + denotes the start of the game
-lastInputChar BYTE ?
+; xPosWall[0] = 10 → Upper-Left corner X
+; xPosWall[1] = 10 → Lower-Left corner X
+; xPosWall[2] = 110 → Upper-Right corner X
+; xPosWall[3] = 110 → Lower-Right corner X
 
-strSpeed      BYTE "Speed (1-fast, 2-medium, 3-slow): ",    0
-speed         DWORD 0
+; yPosWall[0] = 5 → Upper-Left corner Y
+; yPosWall[1] = 27 → Lower-Left corner Y
+; yPosWall[2] = 5 → Upper-Right corner Y
+; yPosWall[3] = 27 → Lower-Right corner Y
+
+; (10,5)     (110,5)
+;     ╔══════════╗
+;     ║          ║
+;     ║          ║
+;     ║          ║
+;     ╚══════════╝
+; (10,27)    (110,27)
 
 
+xCoinPos     BYTE ?
+yCoinPos     BYTE ?
 
+inputChar    BYTE "+"                                                 ; + denotes the start of the game
+; lastInputChar removed (unused)
+speed        DWORD 0
 
-
-
-
-
-
-
-    legendMsg BYTE "Legend: P=Passenger  T=Taxi  C=Car  ▓=Building", 0
             
     title_line1  BYTE "                  _____________  ______________  _______  _____________  _________",  0
     title_line2  BYTE "      _           ___  __ \_  / / /_  ___/__  / / /__  / / /_  __ \_  / / /__  __ \", 0
@@ -122,11 +131,6 @@ speed         DWORD 0
     Car_line7 BYTE "                   '-----'",  0
 
 
-    ; Board dimensions
-    BOARD_WIDTH  = 20
-    BOARD_HEIGHT = 20
-
-
     ROAD_CHAR      BYTE ' ', 0 ; Empty road
     BUILDING_CHAR  BYTE 178, 0 ; ASCII 178 for buildings 
     TAXI_CHAR      BYTE 'T', 0 ; taxi
@@ -134,19 +138,11 @@ speed         DWORD 0
     CAR_CHAR       BYTE 'C', 0 ; Other cars
     OBSTACLE_CHAR  BYTE '#', 0 ; Obstacles
 
-
-    
-    
-    
-    
-
     ; Board display messages
     boardTitle BYTE "=== RUSH HOUR GAME BOARD ===",                                     0
     testMsg    BYTE "Board displayed successfully! Press any key to return to menu...", 0
 
 
-
-    
     ; Error messages
     invalidChoice   BYTE "Invalid choice!",                         0
     pressAnyKey     BYTE "Press any key to continue...",            0
@@ -357,11 +353,14 @@ start_new_game:
     ;call SelectTaxiScreen
     ;call start_game
     call Clrscr
-    call DrawWall			;draw walls
-	call DrawScoreboard		;draw scoreboard
-	call ChooseSpeed		;let player to choose Speed
+    call DrawWall       ;draw walls
+    call DrawScoreboard ;draw scoreboard
 
-    jmp drawSnake		;start the game flow (draw snake and enter game loop)
+    ; Fixed movement speed (milliseconds) — no user prompt
+    mov eax,   5  ; faster: 15 ms delay per move
+    mov speed, eax
+
+    jmp drawCar ;start the game flow (draw car and enter game loop)
     
 continue_game:
     call ContinueGameScreen
@@ -1221,21 +1220,41 @@ WaitForKey ENDP
 
 
 
-drawSnake:
-    mov  esi, 0
-    mov  ecx, 1       ; draw only the head initially
-drawSnake_loop:
-    call DrawPlayer ; draw snake head only
+; =============================================
+; FlushKeys - consume any pending keypresses (handles extended keys)
+; Ensures only a single key is processed per move (prevents diagonal input)
+; Uses Irvine32 ReadKey: when no key available ZF is set.
+FlushKeys:
+Flush_loop:
+    call ReadKey
+    jz   Flush_done        ; no key available → done
+    cmp  al, 0
+    je   Flush_consume_ext ; extended key prefix — consume scan code
+    jmp  Flush_loop
+Flush_consume_ext:
+    call ReadKey
+    jz   Flush_done
+    jmp  Flush_loop
+Flush_done:
+    ret
+
+
+; =============================================
+; drawCar - Main Game Loop
+; ============================================
+drawCar:
+    mov esi, 0
+    mov ecx, 1 ; draw only the head (car)
+drawCar_loop:
+    call DrawPlayer   ; draw car (taxi) head only
     inc  esi
-    loop drawSnake_loop
+    loop drawCar_loop
 
     call Randomize
     call CreateRandomCoin
     call DrawCoin         ; set up finish
 
-    ; Start with default movement to the right so snake moves without initial keypress
-    mov  inputChar, 'd'
-    mov  lastInputChar, 'd'
+    ; No automatic movement: require key press to move
 
     gameLoop::
 		mov  dl, 106 ;move cursor to coordinates
@@ -1244,79 +1263,74 @@ drawSnake_loop:
 
 		; get user key input
         call ReadKey
-            jz   noKey                    ;jump if no key is entered
+            jz gameLoop ;no key → wait for next key press
         ; Handle extended (arrow) keys: first read returns 0, next returns scan code
         cmp  al, 0
         jne  processInput_normal
         ; extended key - read second code
         call ReadKey
         ; map scan codes to WASD
-        cmp  al, 72    ; up arrow scan code
+        cmp  al, 72              ; up arrow scan code
         je   set_w
-        cmp  al, 80    ; down
+        cmp  al, 80              ; down
         je   set_s
-        cmp  al, 75    ; left
+        cmp  al, 75              ; left
         je   set_a
-        cmp  al, 77    ; right
+        cmp  al, 77              ; right
         je   set_d
         jmp  processInput_normal
 
 set_w:
-        mov  al, 'w'
-        jmp  processInput_store
+        mov al, 'w'
+        jmp processInput_store
 
 set_s:
-        mov  al, 's'
-        jmp  processInput_store
+        mov al, 's'
+        jmp processInput_store
 
 set_a:
-        mov  al, 'a'
-        jmp  processInput_store
+        mov al, 'a'
+        jmp processInput_store
 
 set_d:
-        mov  al, 'd'
-        jmp  processInput_store
+        mov al, 'd'
+        jmp processInput_store
 
 processInput_normal:
         ; AL already contains normal key (ASCII)
 
 processInput_store:
-        mov  bl,            inputChar
-        mov  lastInputChar, bl
-        mov  inputChar,     al        ;assign variables
+    mov inputChar, al ;assign variables (single-step movement)
 
-		noKey:
-		cmp inputChar, "x"
-		je  exitgame       ;exit game if user input x
+    ; Discard any extra buffered keypresses so only this key is processed
+    call FlushKeys
 
-		cmp inputChar, "w"
-		je  checkTop
+        cmp inputChar, "x"
+        je  exitgame       ;exit game if user input x
 
-		cmp inputChar, "s"
-		je  checkBottom
+        cmp inputChar, "w"
+        je  checkTop
 
-		cmp inputChar, "a"
-		je  checkLeft
+        cmp inputChar, "s"
+        je  checkBottom
 
-		cmp inputChar, "d"
-		je  checkRight
-		jne gameLoop       ; reloop if no meaningful key was entered
+        cmp inputChar, "a"
+        je  checkLeft
+
+        cmp inputChar, "d"
+        je  checkRight
+        jne gameLoop       ; reloop if no meaningful key was entered
 
 
-		checkBottom:	
-    cmp lastInputChar, "w"
-    je  dontChgDirection
-    mov al, yPos[0]
-    inc al
-    cmp al, 26        ; Explicit bottom boundary (Y=26)
-    jl  moveDown
-    jge died
+        checkBottom: 	
+            mov al, yPos[0]
+            inc al
+                mov cl, yPosWall[3]
+                cmp al, cl          ; compare next Y with bottom wall
+                jb  moveDown
+                je  died
 
-checkLeft:		
-    cmp lastInputChar, "+"
-    je  dontGoLeft
-    cmp lastInputChar, "d"
-    je  dontChgDirection
+checkLeft: 	
     mov al, xPos[0]
     dec al
     mov cl, xPosWall[0]
@@ -1324,9 +1338,7 @@ checkLeft:
     ja  moveLeft
     je  died
 
-checkRight:		
-    cmp lastInputChar, "a"
-    je  dontChgDirection
+checkRight: 	
     mov al, xPos[0]
     inc al
     mov cl, xPosWall[2]
@@ -1334,9 +1346,7 @@ checkRight:
     jb  moveRight
     je  died
 
-checkTop:		
-    cmp lastInputChar, "s"
-    je  dontChgDirection
+checkTop: 	
     mov al, yPos[0]
     dec al
     mov cl, yPosWall[0]
@@ -1348,14 +1358,13 @@ checkTop:
 		mov  eax, speed     ;slow down the moving
 		add  eax, speed
 		call delay
-		mov  esi, 0         ;index 0(snake head)
+        mov  esi, 0         ;index 0 (car)
 		call UpdatePlayer
 		mov  ah,  yPos[esi]
-		mov  al,  xPos[esi] ;alah stores the pos of the snake's next unit 
+        mov  al,  xPos[esi] ;alah stores the pos of the car's next unit 
 		dec  yPos[esi]      ;move the head up
-		call DrawPlayer
-		call DrawBody
-		call CheckSnake
+        call DrawPlayer
+        jmp  checkcoin
 
 		
 		moveDown:                ;move down
@@ -1367,9 +1376,8 @@ checkTop:
 		mov       ah,  yPos[esi]
 		mov       al,  xPos[esi]
 		inc       yPos[esi]
-		call      DrawPlayer
-		call      DrawBody
-		call      CheckSnake
+        call      DrawPlayer
+        jmp       checkcoin
 
 
 		moveLeft:                ;move left
@@ -1380,9 +1388,8 @@ checkTop:
 		mov       ah,  yPos[esi]
 		mov       al,  xPos[esi]
 		dec       xPos[esi]
-		call      DrawPlayer
-		call      DrawBody
-		call      CheckSnake
+        call      DrawPlayer
+        jmp       checkcoin
 
 
 		moveRight:                ;move right
@@ -1393,32 +1400,25 @@ checkTop:
 		mov        ah,  yPos[esi]
 		mov        al,  xPos[esi]
 		inc        xPos[esi]
-		call       DrawPlayer
-		call       DrawBody
-		call       CheckSnake
+        call       DrawPlayer
+        jmp        checkcoin
 
-	; getting points
-		checkcoin::
-		mov esi, 0
-		mov bl,  xPos[0]
-		cmp bl,  xCoinPos
-		jne gameloop      ;reloop if snake is not intersecting with coin
-		mov bl,  yPos[0]
-		cmp bl,  yCoinPos
-		jne gameloop      ;reloop if snake is not intersecting with coin
+    ; Post-move handling (coin check only for single-head car)
+    checkcoin:
+        mov  al, xPos[0]
+        cmp  al, xCoinPos
+        jne  no_eat
+        mov  al, yPos[0]
+        cmp  al, yCoinPos
+        jne  no_eat
+        call EatingCoin
+        jmp  gameLoop
 
-		call EatingCoin ;call to update score, append snake and generate new coin	
+    no_eat:
+        jmp gameLoop
 
-jmp gameLoop ;reiterate the gameloop
 
-
-	dontChgDirection:               ;dont allow user to change direction
-	mov               inputChar, bl ;set current inputChar as previous
-	jmp               noKey         ;jump back to continue moving the same direction 
-
-	dontGoLeft:                ;forbids the snake to go left at the begining of the game
-	mov         inputChar, "+" ;set current inputChar as "+"
-	jmp         gameLoop       ;restart the game loop
+    ; removed direction-lock labels — movement is single-step per key press
 
 	died::
 	call YouDied
@@ -1431,26 +1431,32 @@ jmp gameLoop ;reiterate the gameloop
 ret
 
 
-DrawWall PROC           ;procedure to draw wall
+
+
+
+
+; =============================================
+; DrawWall - draws wall using box-drawing characters
+; =============================================
+DrawWall PROC
     ; Draw a box using box-drawing characters around the wall coordinates
     ; Top-left corner
     mov  dl, xPosWall[0]
     mov  dh, yPosWall[0]
     call Gotoxy
-    mov  al, 201  ; ╔
+    mov  al, 201         ; ╔
     call WriteChar
 
-    ; Draw top horizontal line between left and right corners
-    movzx eax, xPosWall[2]
-    movzx ebx, xPosWall[0]
-    sub  eax, ebx
-    sub  eax, 1          ; number of horizontal chars between corners
-    mov  ecx, eax
-    mov  dl, xPosWall[0]
-    inc  dl
+    movzx eax, xPosWall[2] ; Right X coordinate
+    movzx ebx, xPosWall[0] ; Left X coordinate
+    sub   eax, ebx         ; Calculate width between walls
+    sub   eax, 1           ; Account for corners
+    mov   ecx, eax         ; Set loop counter
+    mov   dl,  xPosWall[0] ; Start from left edge
+    inc   dl               ; Move right one position (past corner)
 draw_top:
     call Gotoxy
-    mov  al, 205  ; ═
+    mov  al, 205   ; ═
     call WriteChar
     inc  dl
     loop draw_top
@@ -1459,53 +1465,53 @@ draw_top:
     mov  dl, xPosWall[2]
     mov  dh, yPosWall[0]
     call Gotoxy
-    mov  al, 187  ; ╗
+    mov  al, 187         ; ╗
     call WriteChar
 
     ; Draw vertical sides (rows) using BL as current row
     movzx eax, yPosWall[0]
-    inc  al
-    mov  bl, al           ; current row
-    movzx eax, yPosWall[3]
-    dec  al
-    mov  bh, al           ; last row
+    inc   al               ; The top horizontal line is already drawn at Y=5
+    mov   bl,  al          ; BL becomes our current row counter
+    movzx eax, yPosWall[3] ; movzx: Converts byte value 27 to 32-bit: EAX = 27
+    dec   al               ; The bottom horizontal line will be drawn at Y=27
+    mov   bh,  al          ; last row BH becomes our loop limit
 draw_rows_loop:
     ; Left border at (xPosWall[0], bl)
     mov  dl, xPosWall[0]
     mov  dh, bl
     call Gotoxy
-    mov  al, 186  ; ║
+    mov  al, 186         ; ║
     call WriteChar
 
     ; Right border at (xPosWall[2], bl)
     mov  dl, xPosWall[2]
     mov  dh, bl
     call Gotoxy
-    mov  al, 186  ; ║
+    mov  al, 186         ; ║
     call WriteChar
 
-    inc  bl
-    cmp  bl, bh
-    jle  draw_rows_loop
+    inc bl
+    cmp bl, bh         ; cmp bl, bh: Compare BL (current row) with BH (last row = 26)
+    jle draw_rows_loop ; jle: "Jump if Less or Equal"
 
     ; Bottom-left corner
     mov  dl, xPosWall[0]
     mov  dh, yPosWall[3]
     call Gotoxy
-    mov  al, 200  ; ╚
+    mov  al, 200         ; ╚
     call WriteChar
 
     ; Bottom horizontal
     movzx eax, xPosWall[2]
     movzx ebx, xPosWall[0]
-    sub  eax, ebx
-    sub  eax, 1
-    mov  ecx, eax
-    mov  dl, xPosWall[0]
-    inc  dl
+    sub   eax, ebx
+    sub   eax, 1
+    mov   ecx, eax
+    mov   dl,  xPosWall[0]
+    inc   dl
 draw_bottom:
     call Gotoxy
-    mov  al, 205  ; ═
+    mov  al, 205     ; ═
     call WriteChar
     inc  dl
     loop draw_bottom
@@ -1514,13 +1520,18 @@ draw_bottom:
     mov  dl, xPosWall[2]
     mov  dh, yPosWall[3]
     call Gotoxy
-    mov  al, 188  ; ╝
+    mov  al, 188         ; ╝
     call WriteChar
 
     ret
 DrawWall       ENDP
 
 
+
+
+; =============================================
+; DrawScoreboard - draws the scoreboard
+; =============================================
 DrawScoreboard PROC ;procedure to draw scoreboard
 	mov  dl,  2
 	mov  dh,  1
@@ -1533,47 +1544,22 @@ DrawScoreboard PROC ;procedure to draw scoreboard
 DrawScoreboard ENDP
 
 
-ChooseSpeed    PROC ;procedure for player to choose speed
-	mov  edx,   0
-	mov  dl,    71
-	mov  dh,    1
-	call Gotoxy
-	mov  edx,   OFFSET strSpeed ; prompt to enter integers (1,2,3)
-	call WriteString
-	mov  esi,   40              ; milisecond difference per speed level
-	mov  eax,   0
-	call readInt
-	cmp  ax,    1               ;input validation
-	jl   invalidspeed
-	cmp  ax,    3
-	jg   invalidspeed
-	mul  esi
-	mov  speed, eax             ;assign speed variable in mililiseconds
-	ret
+; ChooseSpeed removed — speed is fixed at game start (no prompt)
 
-	invalidspeed:                          ;jump here if user entered an invalid number
-	mov           dl,  105
-	mov           dh,  1
-	call          Gotoxy
-	mov           edx, OFFSET invalidInput ;print error message		
-	call          WriteString
-	mov           ax,  1500
-	call          delay
-	mov           dl,  105
-	mov           dh,  1
-	call          Gotoxy
-	mov           edx, OFFSET blank        ;erase error message after 1.5 secs of delay
-	call          writeString
-	call          ChooseSpeed              ;call procedure for user to choose again
-	ret
-ChooseSpeed ENDP
+DrawPlayer     PROC ; draw player (taxi) at (xPos,yPos) in yellow
+    ; set yellow color
+    mov  eax, yellow + (black * 16)
+    call SetTextColor
 
-DrawPlayer  PROC ; draw player at (xPos,yPos)
     mov  dl, xPos[esi]
     mov  dh, yPos[esi]
     call Gotoxy
-    mov  al, snake[esi]
+    mov  al, car[esi]
     call WriteChar
+
+    ; restore white color
+    mov  eax, white + (black * 16)
+    call SetTextColor
     ret
 DrawPlayer   ENDP
 
@@ -1601,117 +1587,69 @@ DrawCoin         ENDP
 
 CreateRandomCoin PROC ;procedure to create a random coin
     ; Generate X between (xPosWall[0]+1) .. (xPosWall[2]-1)
-    movzx ecx, xPosWall[2]
-    movzx ebx, xPosWall[0]
-    mov  eax, ecx
-    sub  eax, ebx
-    sub  eax, 1        ; W = right - left - 1
-    dec  eax           ; pass W-1 to RandomRange to get 0..W-1
-    call RandomRange
-    add  eax, ebx
-    inc  eax           ; now EAX in [left+1 .. right-1]
-    mov  xCoinPos, al
+    movzx ecx,      xPosWall[2]
+    movzx ebx,      xPosWall[0]
+    mov   eax,      ecx
+    sub   eax,      ebx
+    sub   eax,      1           ; W = right - left - 1
+    dec   eax                   ; pass W-1 to RandomRange to get 0..W-1
+    call  RandomRange
+    add   eax,      ebx
+    inc   eax                   ; now EAX in [left+1 .. right-1]
+    mov   xCoinPos, al
 
     ; Generate Y between (yPosWall[0]+1) .. (yPosWall[3]-1)
-    movzx ecx, yPosWall[3]
-    movzx ebx, yPosWall[0]
-    mov  eax, ecx
-    sub  eax, ebx
-    sub  eax, 1
-    dec  eax
-    call RandomRange
-    add  eax, ebx
-    inc  eax
-    mov  yCoinPos, al
+    movzx ecx,      yPosWall[3]
+    movzx ebx,      yPosWall[0]
+    mov   eax,      ecx
+    sub   eax,      ebx
+    sub   eax,      1
+    dec   eax
+    call  RandomRange
+    add   eax,      ebx
+    inc   eax
+    mov   yCoinPos, al
 
     mov ecx, 5
-    add cl,  score ;loop number of snake unit
+    add cl,  score ;loop number of car unit
     mov esi, 0
 checkCoinXPos:
     movzx eax, xCoinPos
     cmp   al,  xPos[esi]
-    je    checkCoinYPos  ;jump if xPos of snake at esi = xPos of coin
+    je    checkCoinYPos  ;jump if xPos of car at esi = xPos of coin
 continueloop:
-    inc   esi
+    inc  esi
     loop checkCoinXPos
-    ret                    ; return when coin is not on snake
+    ret                ; return when coin is not on car
 checkCoinYPos:
     movzx eax, yCoinPos
     cmp   al,  yPos[esi]
-    jne   continueloop     ; jump back to continue loop if yPos of snake at esi != yPos of coin
-    call  CreateRandomCoin ; coin generated on snake, calling function again to create another set of coordinates
+    jne   continueloop     ; jump back to continue loop if yPos of car at esi != yPos of coin
+    call  CreateRandomCoin ; coin generated on car, calling function again to create another set of coordinates
 CreateRandomCoin ENDP
 
-CheckSnake       PROC ;check whether the snake head collides w its body 
-	mov al,  xPos[0]
-	mov ah,  yPos[0]
-	mov esi, 4       ;start checking from index 4(5th unit)
-	mov ecx, 1
-	add cl,  score
-checkXposition:
-	cmp xPos[esi], al ;check if xpos same ornot
-	je  XposSame
-	contloop:
-	inc esi
-loop checkXposition
-	jmp       checkcoin
-	XposSame:               ; if xpos same, check for ypos
-	cmp       yPos[esi], ah
-	je        died          ;if collides, snake dies
-	jmp       contloop
+CheckCar         PROC ;check whether the car head collides w its body 
+    ; No self-collision check needed for single-segment car
+    ret
+CheckCar ENDP
 
-CheckSnake ENDP
-
-DrawBody   PROC ;procedure to print body of the snake
-        ; No body rendering - snake is represented by a single 'x' (head only)
+DrawBody PROC ;procedure to print body of the car
+    ; No body rendering - car is represented by a single 'T' (head only)
         ret
 DrawBody   ENDP
 
 EatingCoin PROC
-	; snake is eating coin
-	inc score
-	mov ebx,       4
-	add bl,        score
-	mov esi,       ebx
-	mov ah,        yPos[esi-1]
-	mov al,        xPos[esi-1]
-	mov xPos[esi], al          ;add one unit to the snake
-	mov yPos[esi], ah          ;pos of new tail = pos of old tail
+    ; car is eating coin - single 'T' car: just increase score and respawn coin
+    inc  score
+    call CreateRandomCoin
+    call DrawCoin
 
-	cmp xPos[esi-2], al ;check if the old tail and the unit before is on the yAxis
-	jne checky          ;jump if not on the yAxis
-
-	cmp   yPos[esi-2], ah ;check if the new tail should be above or below of the old tail 
-	jl    incy
-	jg    decy
-	incy:                 ;inc if below
-	inc   yPos[esi]
-	jmp   continue
-	decy:                 ;dec if above
-	dec   yPos[esi]
-	jmp   continue
-
-	checky:                 ;old tail and the unit before is on the xAxis
-	cmp     yPos[esi-2], ah ;check if the new tail should be right or left of the old tail
-	jl      incx
-	jg      decx
-	incx:                   ;inc if right
-	inc     xPos[esi]
-	jmp     continue
-	decx:                   ;dec if left
-	dec     xPos[esi]
-
-	continue:                  ;add snake tail and update new coin
-	call      DrawPlayer
-	call      CreateRandomCoin
-	call      DrawCoin
-
-	mov  dl, 17    ; write updated score
-	mov  dh, 1
-	call Gotoxy
-	mov  al, score
-	call WriteInt
-	ret
+    mov  dl, 17    ; write updated score
+    mov  dh, 1
+    call Gotoxy
+    mov  al, score
+    call WriteInt
+    ret
 EatingCoin ENDP
 
 
@@ -1763,22 +1701,13 @@ YouDied    PROC
 YouDied          ENDP
 
 ReinitializeGame PROC ;procedure to reinitialize everything
-	mov  xPos[0],       15
-    mov  xPos[1],       14
-    mov  xPos[2],       13
-    mov  xPos[3],       12
-    mov  xPos[4],       11  ; Start at left boundary (X=11)
-    mov  yPos[0],       15
-    mov  yPos[1],       15
-    mov  yPos[2],       15
-    mov  yPos[3],       15
-    mov  yPos[4],       15
-	mov  score,         0   ;reinitialize score
-	mov  lastInputChar, 0
-	mov  inputChar,     "+" ;reinitialize inputChar and lastInputChar
+    mov  xPos[0],   15
+    mov  yPos[0],   15
+    mov  score,     0   ;reinitialize score
+    mov  inputChar, "+" ;reinitialize inputChar
     ; (Do not modify wall coordinates here) - keep wall size stable
-	Call ClrScr
-	jmp  main               ;start over the game
+    Call ClrScr
+    jmp  main           ;start over the game
 ReinitializeGame ENDP
 
 
@@ -1803,3 +1732,29 @@ ReinitializeGame ENDP
 
 
 END              main
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+; irvine32 functions that are not in the https://csc.csudh.edu/mmccullough/asm/help/index.html?page=source%2Fabout.htm
+
+; Gotoxy is a procedure from the Irvine32 library that positions the cursor at specific coordinates on the console screen.
+; mov  dl, column   ; X coordinate (0-based, left to right)
+; mov  dh, row      ; Y coordinate (0-based, top to bottom)  
+; call Gotoxy       ; Position cursor
