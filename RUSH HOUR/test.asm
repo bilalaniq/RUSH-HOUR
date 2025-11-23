@@ -36,8 +36,8 @@ car          BYTE 'T'
 
 
 ; Keep only head position (single 'T' car)
-xPos         BYTE 15,                                      100 DUP(?) ; Head X (start near left boundary)
-yPos         BYTE 15,                                      100 DUP(?) ; Head Y
+xPos         BYTE 11,                                      100 DUP(?) ; Head X (start near left boundary)
+yPos         BYTE 6,                                      100 DUP(?) ; Head Y
 
 ; Widened wall coordinates: increased right side X from 85 -> 96
 xPosWall BYTE 10,10,110,110			;position of upperLeft, lowerLeft, upperRight, lowerRignt wall 
@@ -1210,25 +1210,25 @@ WaitForKey ENDP
 
 
 
-; =============================================
-; FlushKeys - consume any pending keypresses (handles extended keys)
-; Ensures only a single key is processed per move (prevents diagonal input)
-; Uses Irvine32 ReadKey: when no key available ZF is set.
-; =============================================
+; ; =============================================
+; ; FlushKeys - consume any pending keypresses (handles extended keys)
+; ; Ensures only a single key is processed per move (prevents diagonal input)
+; ; Uses Irvine32 ReadKey: when no key available ZF is set.
+; ; =============================================
 
-FlushKeys:
-Flush_loop:
-    call ReadKey
-    jz   Flush_done        ; no key available → done
-    cmp  al, 0
-    je   Flush_consume_ext ; extended key prefix — consume scan code
-    jmp  Flush_loop
-Flush_consume_ext:
-    call ReadKey
-    jz   Flush_done
-    jmp  Flush_loop
-Flush_done:
-    ret
+; FlushKeys:
+; Flush_loop:
+;     call ReadKey
+;     jz   Flush_done        ; no key available → done
+;     cmp  al, 0
+;     je   Flush_consume_ext ; extended key prefix — consume scan code
+;     jmp  Flush_loop
+; Flush_consume_ext:
+;     call ReadKey
+;     jz   Flush_done
+;     jmp  Flush_loop
+; Flush_done:
+;     ret
 
 
 ; =============================================
@@ -1277,7 +1277,7 @@ normal_key:
 
     ; process 'p' (or other future normal keys) via storing and FlushKeys
     mov  inputChar, al  ;assign variables (single-step movement)
-    call FlushKeys
+    ; call FlushKeys
     cmp  inputChar, "p"
     je   exitgame
     jmp  gameLoop       ; reloop if no meaningful key was entered
@@ -1629,7 +1629,6 @@ widthLoop:
 DrawBuildings ENDP
 
 
-
 ; =============================================
 ; IsBuilding - checks if a position contains a building
 ; Input: DL = X position, DH = Y position
@@ -1647,28 +1646,40 @@ IsBuilding PROC
     
 checkLoop:
     ; Load building data
-    mov al, [esi]        ; X
-    mov ah, [esi+1]      ; Y  
-    mov bl, [esi+2]      ; width
-    mov bh, [esi+3]      ; height
+    mov al, [esi]        ; Building X (left)
+    mov ah, [esi+1]      ; Building Y (top)  
+    mov bl, [esi+2]      ; Building width
+    mov bh, [esi+3]      ; Building height
     
-    ; Check X bounds: buildingX <= posX < buildingX + width
+    ; Calculate building boundaries
+    ; Left boundary = buildingX
+    ; Right boundary = buildingX + width - 1
+    ; Top boundary = buildingY  
+    ; Bottom boundary = buildingY + height - 1
+    
+    ; Check if position X is within building's X range
+    ; if (posX >= buildingX) AND (posX <= buildingX + width - 1)
     cmp dl, al
-    jb nextBuilding
-    mov cl, al
-    add cl, bl
-    cmp dl, cl
-    jae nextBuilding
+    jl nextBuilding      ; posX < buildingX → not in building
     
-    ; Check Y bounds: buildingY <= posY < buildingY + height  
+    mov bh, al           ; Save buildingX in BH temporarily
+    add bh, bl           ; BH = buildingX + width
+    dec bh               ; BH = buildingX + width - 1 (right boundary)
+    cmp dl, bh
+    jg nextBuilding      ; posX > right boundary → not in building
+    
+    ; Check if position Y is within building's Y range
+    ; if (posY >= buildingY) AND (posY <= buildingY + height - 1)
     cmp dh, ah
-    jb nextBuilding
-    mov cl, ah
-    add cl, bh
-    cmp dh, cl
-    jae nextBuilding
+    jl nextBuilding      ; posY < buildingY → not in building
     
-    ; Position is inside a building!
+    mov bl, ah           ; Save buildingY in BL temporarily  
+    add bl, bh           ; BL = buildingY + height (using original BH value)
+    dec bl               ; BL = buildingY + height - 1 (bottom boundary)
+    cmp dh, bl
+    jg nextBuilding      ; posY > bottom boundary → not in building
+    
+    ; If we get here, position is inside the building!
     mov al, 1
     ret
     
@@ -1743,6 +1754,17 @@ DrawPlayer   ENDP
 
 
 ; =============================================
+; DrawNPC
+; =============================================
+DrawNPC    PROC ; draw NPC at (xNPCPos,yNPCPos) in red
+  
+DrawNPC   ENDP
+
+
+
+
+
+; =============================================
 ; UpdatePlayer - erase player at (xPos,yPos)  esi = index of player to erase 
 ; =============================================
 UpdatePlayer PROC ; erase player at (xPos,yPos)
@@ -1761,9 +1783,6 @@ UpdatePlayer ENDP
 ; DrawCoin - draws coin at (xCoinPos,yCoinPos)
 ; =============================================
 DrawCoin     PROC ;procedure to draw coin
-
-    
-
 	mov  eax, blue (blue * 16)
 	call SetTextColor            ;set color to yellow for coin
 	mov  dl,  xCoinPos
@@ -1842,6 +1861,7 @@ EatingCoin       PROC
     ; car is eating coin - single 'T' car: just increase score and respawn coin
     inc  score
     call CreateRandomCoin
+    
     call DrawCoin
 
     mov  dl, 17    ; write updated score
