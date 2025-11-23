@@ -15,8 +15,12 @@ INCLUDELIB   user32.lib
 ; =============================================
 .data
 
+; Building position storage - tracks all placed buildings
+buildingPositions BYTE 200 DUP(0)  ; Stores X,Y pairs for each building block
+buildingCountPlaced BYTE 0         ; Number of buildings actually placed
 
-xWall        BYTE 52 DUP("#"),                             0
+
+
 
 strScore     BYTE "Your score is: ",                       0
 score        BYTE 0
@@ -126,18 +130,6 @@ speed        DWORD 0
     Car_line5 BYTE "                  []=\_/=[]", 0
     Car_line6 BYTE "                     _V_",    0
     Car_line7 BYTE "                   '-----'",  0
-
-
-    ROAD_CHAR      BYTE ' ', 0 ; Empty road
-    BUILDING_CHAR  BYTE 178, 0 ; ASCII 219 for buildings 
-    TAXI_CHAR      BYTE 'T', 0 ; taxi
-    PASSENGER_CHAR BYTE 'P', 0 ; Passenger
-    CAR_CHAR       BYTE 'C', 0 ; Other cars
-    OBSTACLE_CHAR  BYTE '#', 0 ; Obstacles
-
-    ; Board display messages
-    boardTitle BYTE "=== RUSH HOUR GAME BOARD ===",                                     0
-    testMsg    BYTE "Board displayed successfully! Press any key to return to menu...", 0
 
 
     ; Error messages
@@ -1389,9 +1381,6 @@ ret
 
 
 
-
-
-
 ; =============================================
 ; DrawWall - draws wall using box-drawing characters
 ; =============================================
@@ -1484,6 +1473,7 @@ draw_bottom:
 DrawWall       ENDP
 
 
+    
 ; =============================================
 ; DrawBuildings - draws random building obstacles inside the game area
 ; =============================================
@@ -1507,6 +1497,9 @@ DrawBuildings PROC
     call RandomRange
     add al, 20
     mov buildingCount, al
+    
+    ; Reset building counter
+    mov buildingCountPlaced, 0
     
     movzx ecx, buildingCount        ; Zero-extend byte to dword for loop counter
 buildingLoop:
@@ -1562,21 +1555,43 @@ increaseHeight:
     mov buildingHeight, 3
     
 drawBuilding:
+    ; Store this building's position data
+    mov esi, OFFSET buildingPositions
+
+    ; Memory: [25, 8, 4, 2, ...]
+    ;      ↑   ↑  ↑  ↑
+    ;      X   Y  W  H  (bytes 0-3 for building #3)
+
+    movzx eax, buildingCountPlaced
+    imul eax, eax, 4  ; Each building uses 4 bytes: X, Y, width, height Multiply building count by 4
+    add esi, eax
+    
+    mov al, buildingX
+    mov [esi], al      ; Store X position
+    mov al, buildingY
+    mov [esi+1], al    ; Store Y position
+    mov al, buildingWidth
+    mov [esi+2], al    ; Store width
+    mov al, buildingHeight
+    mov [esi+3], al    ; Store height
+    
+    inc buildingCountPlaced  ; Increment building counter
+
     ; Draw the building
-    movzx ecx, buildingHeight
-    mov i, 0
+    movzx ecx, buildingHeight       ; Set up height loop
+    mov i, 0                        ; Row counter
 heightLoop:
-    push ecx
-    movzx ecx, buildingWidth
-    mov j, 0
+    push ecx                    
+    movzx ecx, buildingWidth          ; Set up width loop  
+    mov j, 0                          ; Column counter
 widthLoop:
-        push ecx
+        push ecx          ; Saves the current value of ECX (width counter) onto the stack
         
         ; Calculate position
-        mov dl, buildingX
-        add dl, j
-        mov dh, buildingY
-        add dh, i
+        mov dl, buildingX         ; DL = building's leftmost X coordinate
+        add dl, j                 ; DL = buildingX + current column offset
+        mov dh, buildingY         ; DH = building's topmost Y coordinate
+        add dh, i                 ;  DH = buildingY + current row offset
         
         ; Check if within wall boundaries
         cmp dl, 10
@@ -1590,7 +1605,7 @@ widthLoop:
         
         ; Draw the block
         call Gotoxy
-        mov al, 219
+        mov al, 178
         call WriteChar
         
     skipBlock:
@@ -1612,6 +1627,83 @@ widthLoop:
     
     ret
 DrawBuildings ENDP
+
+
+
+; =============================================
+; IsBuilding - checks if a position contains a building
+; Input: DL = X position, DH = Y position
+; Returns: AL = 1 if building, AL = 0 if not building
+; =============================================
+IsBuilding PROC
+    ; Check if any buildings exist
+    mov al, buildingCountPlaced
+    cmp al, 0
+    je noBuilding
+    
+    ; Check each building
+    mov esi, OFFSET buildingPositions
+    movzx ecx, buildingCountPlaced
+    
+checkLoop:
+    ; Load building data
+    mov al, [esi]        ; X
+    mov ah, [esi+1]      ; Y  
+    mov bl, [esi+2]      ; width
+    mov bh, [esi+3]      ; height
+    
+    ; Check X bounds: buildingX <= posX < buildingX + width
+    cmp dl, al
+    jb nextBuilding
+    mov cl, al
+    add cl, bl
+    cmp dl, cl
+    jae nextBuilding
+    
+    ; Check Y bounds: buildingY <= posY < buildingY + height  
+    cmp dh, ah
+    jb nextBuilding
+    mov cl, ah
+    add cl, bh
+    cmp dh, cl
+    jae nextBuilding
+    
+    ; Position is inside a building!
+    mov al, 1
+    ret
+    
+nextBuilding:
+    add esi, 4
+    loop checkLoop
+    
+noBuilding:
+    mov al, 0
+    ret
+IsBuilding ENDP
+
+
+
+
+; ; Example 1: Check if player position hits a building
+; mov dl, playerX
+; mov dh, playerY
+; call IsBuilding
+; cmp al, 1
+; je handleBuildingCollision
+
+; ; Example 2: Check if bullet hits a building  
+; mov dl, bulletX
+; mov dh, bulletY
+; call IsBuilding
+; cmp al, 1
+; je destroyBullet
+
+; ; Example 3: Check if position is clear before spawning
+; mov dl, spawnX
+; mov dh, spawnY
+; call IsBuilding
+; cmp al, 0
+; je spawnObject  ; Only spawn if no building
 
 
 
@@ -1669,6 +1761,9 @@ UpdatePlayer ENDP
 ; DrawCoin - draws coin at (xCoinPos,yCoinPos)
 ; =============================================
 DrawCoin     PROC ;procedure to draw coin
+
+    
+
 	mov  eax, blue (blue * 16)
 	call SetTextColor            ;set color to yellow for coin
 	mov  dl,  xCoinPos
@@ -1711,6 +1806,15 @@ CreateRandomCoin PROC ;procedure to create a random coin
     inc   eax                   ; 6-26 (ensure inside walls)
     mov   yCoinPos, al          ; Store final Y position
 
+
+; --- Ensure coin is not inside a building ---
+    mov   dl, xCoinPos          ; DL = coin X
+    mov   dh, yCoinPos          ; DH = coin Y
+    call  IsBuilding            ; AL = 1 if inside a building
+    cmp   al, 1
+    je    CreateRandomCoin      ; regenerate if coin is inside a building
+
+
     mov ecx, 1 ; ECX = 1 (single-segment car)
     mov esi, 0
 checkCoinXPos:
@@ -1727,7 +1831,6 @@ checkCoinYPos:
     jne   continueloop     ; If Y doesn't match, continue to next segment (but there are no more!)
     call  CreateRandomCoin ; coin generated on car, calling function again to create another set of coordinates
 CreateRandomCoin ENDP
-
 
 
 
