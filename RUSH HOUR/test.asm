@@ -28,11 +28,8 @@ strPoints    BYTE " point(s)",                             0
 blank        BYTE "                                     ", 0
 
 ; Represent the car (player vehicle) using 'T' characters (single char per segment)
-car          BYTE 200 DUP('T')
+car          BYTE 'T'
 
-
-;xPos BYTE 45,44,43,42,41, 100 DUP(?)
-;yPos BYTE 15,15,15,15,15, 100 DUP(?)
 
 ; Keep only head position (single 'T' car)
 xPos         BYTE 15,                                      100 DUP(?) ; Head X (start near left boundary)
@@ -132,7 +129,7 @@ speed        DWORD 0
 
 
     ROAD_CHAR      BYTE ' ', 0 ; Empty road
-    BUILDING_CHAR  BYTE 178, 0 ; ASCII 178 for buildings 
+    BUILDING_CHAR  BYTE 178, 0 ; ASCII 219 for buildings 
     TAXI_CHAR      BYTE 'T', 0 ; taxi
     PASSENGER_CHAR BYTE 'P', 0 ; Passenger
     CAR_CHAR       BYTE 'C', 0 ; Other cars
@@ -350,14 +347,16 @@ ProcessMenuChoice PROC
     ret
 
 start_new_game:
-    ;call SelectTaxiScreen
+    call SelectTaxiScreen
+    ; call EnterPlayer_Name
     ;call start_game
     call Clrscr
-    call DrawWall       ;draw walls
-    call DrawScoreboard ;draw scoreboard
+    call DrawWall         ;draw walls
+    call DrawScoreboard   ;draw scoreboard
+    call DrawBuildings
 
     ; Fixed movement speed (milliseconds) — no user prompt
-    mov eax,   5  ; faster: 15 ms delay per move
+    mov eax,   5   ; faster: 15 ms delay per move
     mov speed, eax
 
     jmp drawCar ;start the game flow (draw car and enter game loop)
@@ -520,13 +519,12 @@ colourinput_loop:
     call RandomRange
     add  eax,              1
     mov  UserColourChoice, al
-    jmp  name_screen
+    jmp  return_back
 
 not_three:
     mov UserColourChoice, al
 
-name_screen:
-    call EnterPlayer_Name
+return_back:
     ret
 
 invalid_input:
@@ -1224,6 +1222,8 @@ WaitForKey ENDP
 ; FlushKeys - consume any pending keypresses (handles extended keys)
 ; Ensures only a single key is processed per move (prevents diagonal input)
 ; Uses Irvine32 ReadKey: when no key available ZF is set.
+; =============================================
+
 FlushKeys:
 Flush_loop:
     call ReadKey
@@ -1247,134 +1247,96 @@ drawCar:
     mov ecx, 1 ; draw only the head (car)
 drawCar_loop:
     call DrawPlayer   ; draw car (taxi) head only
-    inc  esi
+    inc  esi          ; it is passed in the drawplayer proc to know which part to draw
     loop drawCar_loop
 
     call Randomize
     call CreateRandomCoin
     call DrawCoin         ; set up finish
 
-    ; No automatic movement: require key press to move
-
     gameLoop::
-		mov  dl, 106 ;move cursor to coordinates
-		mov  dh, 1
-		call Gotoxy
+    mov  dl, 106 ;move cursor to coordinates where it is safe so no overlap occurs
+    mov  dh, 1
+    call Gotoxy
 
-		; get user key input
-        call ReadKey
-            jz gameLoop ;no key → wait for next key press
-        ; Handle extended (arrow) keys: first read returns 0, next returns scan code
-        cmp  al, 0
-        jne  processInput_normal
-        ; extended key - read second code
-        call ReadKey
-        ; map scan codes to WASD
-        cmp  al, 72              ; up arrow scan code
-        je   set_w
-        cmp  al, 80              ; down
-        je   set_s
-        cmp  al, 75              ; left
-        je   set_a
-        cmp  al, 77              ; right
-        je   set_d
-        jmp  processInput_normal
+    ; get user key input
+    call ReadKey  ; No Key Pressed → ZF = 1 (Zero Flag SET) on Key Pressed call ReadKey → ZF = 0 (Zero Flag CLEAR)
+    jz   gameLoop ;no key → wait for next key press
+    
+    ; Handle extended (arrow) keys: when AL==0 the scan code is in AH
+    cmp al, 0      ; Extended keys (arrow keys, function keys) send two bytes: first byte is 0, second byte is scan code
+    jne normal_key ; If AL != 0, it's a normal ASCII key and we jump to normal_key processing
 
-set_w:
-        mov al, 'w'
-        jmp processInput_store
+    ; Extended key — check scan code in AH and jump to movement checks
+    cmp ah, 72      ; Up arrow scan code
+    je  checkTop
+    cmp ah, 80      ; Down
+    je  checkBottom
+    cmp ah, 75      ; Left
+    je  checkLeft
+    cmp ah, 77      ; Right
+    je  checkRight
+    jmp gameLoop
 
-set_s:
-        mov al, 's'
-        jmp processInput_store
+normal_key:
+    ; AL contains a normal ASCII key
+    cmp al, 'p'
+    jne gameLoop
 
-set_a:
-        mov al, 'a'
-        jmp processInput_store
-
-set_d:
-        mov al, 'd'
-        jmp processInput_store
-
-processInput_normal:
-        ; AL already contains normal key (ASCII)
-
-processInput_store:
-    mov inputChar, al ;assign variables (single-step movement)
-
-    ; Discard any extra buffered keypresses so only this key is processed
+    ; process 'p' (or other future normal keys) via storing and FlushKeys
+    mov  inputChar, al  ;assign variables (single-step movement)
     call FlushKeys
+    cmp  inputChar, "p"
+    je   exitgame
+    jmp  gameLoop       ; reloop if no meaningful key was entered
 
-        cmp inputChar, "x"
-        je  exitgame       ;exit game if user input x
-
-        cmp inputChar, "w"
-        je  checkTop
-
-        cmp inputChar, "s"
-        je  checkBottom
-
-        cmp inputChar, "a"
-        je  checkLeft
-
-        cmp inputChar, "d"
-        je  checkRight
-        jne gameLoop       ; reloop if no meaningful key was entered
-
-
-        checkBottom: 	
-            mov al, yPos[0]
-            inc al
-                mov cl, yPosWall[3]
-                cmp al, cl          ; compare next Y with bottom wall
-                jb  moveDown
-                je  died
+checkBottom: 	
+    mov al, yPos[0]    ; Get current Y position
+    inc al             ; Calculate: current Y + 1 (moving down)
+    mov cl, yPosWall[3]; Get bottom wall position (27)
+    cmp al, cl         ; Compare next position with wall
+    jb  moveDown       ; If next Y < 27 → safe to move down
+    je  died           ; If next Y = 27 → hit wall, game over
 
 checkLeft: 	
-    mov al, xPos[0]
-    dec al
-    mov cl, xPosWall[0]
-    cmp al, cl
-    ja  moveLeft
-    je  died
+    mov al, xPos[0]    ; Get current X position
+    dec al             ; Calculate: current X - 1 (moving left)
+    mov cl, xPosWall[0]; Get left wall position (10)
+    cmp al, cl         ; Compare next position with wall
+    ja  moveLeft       ; If next X > 10 → safe to move left
+    je  died           ; If next X = 10 → hit wall, game over
 
 checkRight: 	
-    mov al, xPos[0]
-    inc al
-    mov cl, xPosWall[2]
-    cmp al, cl
-    jb  moveRight
-    je  died
+    mov al, xPos[0]    ; Get current X position
+    inc al             ; Calculate: current X + 1 (moving right)
+    mov cl, xPosWall[2]; Get right wall position (110)
+    cmp al, cl         ; Compare next position with wall
+    jb  moveRight      ; If next X < 110 → safe to move right
+    je  died           ; If next X = 110 → hit wall, game over
 
 checkTop: 	
-    mov al, yPos[0]
-    dec al
-    mov cl, yPosWall[0]
-    cmp al, cl
-    ja  moveUp
-    je  died
+    mov al, yPos[0]    ; Get current Y position
+    dec al             ; Calculate: current Y - 1 (moving up)
+    mov cl, yPosWall[0]; Get top wall position (5)
+    cmp al, cl         ; Compare next position with wall
+    ja  moveUp         ; If next Y > 5 → safe to move up
+    je  died           ; If next Y = 5 → hit wall, game over
 		
 		moveUp:		
-		mov  eax, speed     ;slow down the moving
-		add  eax, speed
-		call delay
+		mov  eax, speed     
+		call delay          ; Pauses the game for the calculated time Without this delay, the car would move too fast to control 
         mov  esi, 0         ;index 0 (car)
 		call UpdatePlayer
-		mov  ah,  yPos[esi]
-        mov  al,  xPos[esi] ;alah stores the pos of the car's next unit 
-		dec  yPos[esi]      ;move the head up
+		dec  yPos[esi]       ; Move up (Y = Y - 1) 
         call DrawPlayer
         jmp  checkcoin
 
 		
 		moveDown:                ;move down
 		mov       eax, speed
-		add       eax, speed
 		call      delay
 		mov       esi, 0
 		call      UpdatePlayer
-		mov       ah,  yPos[esi]
-		mov       al,  xPos[esi]
 		inc       yPos[esi]
         call      DrawPlayer
         jmp       checkcoin
@@ -1385,8 +1347,6 @@ checkTop:
 		call      delay
 		mov       esi, 0
 		call      UpdatePlayer
-		mov       ah,  yPos[esi]
-		mov       al,  xPos[esi]
 		dec       xPos[esi]
         call      DrawPlayer
         jmp       checkcoin
@@ -1397,8 +1357,6 @@ checkTop:
 		call       delay
 		mov        esi, 0
 		call       UpdatePlayer
-		mov        ah,  yPos[esi]
-		mov        al,  xPos[esi]
 		inc        xPos[esi]
         call       DrawPlayer
         jmp        checkcoin
@@ -1418,9 +1376,8 @@ checkTop:
         jmp gameLoop
 
 
-    ; removed direction-lock labels — movement is single-step per key press
 
-	died::
+	died:
 	call YouDied
 	 
 	playagn::			
@@ -1527,6 +1484,136 @@ draw_bottom:
 DrawWall       ENDP
 
 
+; =============================================
+; DrawBuildings - draws random building obstacles inside the game area
+; =============================================
+DrawBuildings PROC
+    LOCAL buildingCount:BYTE      ; Number of buildings to generate
+    LOCAL buildingX:BYTE          ; Top-left X position of building
+    LOCAL buildingY:BYTE          ; Top-left Y position of building  
+    LOCAL buildingWidth:BYTE      ; Width of building in blocks
+    LOCAL buildingHeight:BYTE     ; Height of building in blocks
+    LOCAL i:BYTE                  ; Loop counter for height
+    LOCAL j:BYTE                  ; Loop counter for width
+    
+    mov eax, gray + (black * 16)
+    call SetTextColor
+    
+    ; Initialize random seed
+    call Randomize
+    
+    ; Generate random buildings
+    mov eax, 20  
+    call RandomRange
+    add al, 20
+    mov buildingCount, al
+    
+    movzx ecx, buildingCount        ; Zero-extend byte to dword for loop counter
+buildingLoop:
+    push ecx  ; Save loop counter since we'll use ECX for other purposes
+    
+    ; Generate random building position and size
+    ; X position: between 11 and 100 (within walls 10-110)
+    mov eax, 80  ; 100-20 = 80 possible positions
+    call RandomRange
+    add al, 20   ; 20 + (0-79) = 20-99
+    mov buildingX, al
+    
+    ; Y position: between 6 and 22 (within walls 5-27)
+    mov eax, 16  ; 22-6 = 16 possible positions
+    call RandomRange
+    add al, 6    ; 6 + (0-15) = 6-21
+    mov buildingY, al
+    
+    ; Building width: 3-6 blocks
+    mov eax, 4   ; 0-3
+    call RandomRange
+    add al, 3    ; 3-6 blocks wide
+    mov buildingWidth, al
+    
+    ; Building height: 2-4 blocks
+    mov eax, 3   ; 0-2
+    call RandomRange
+    add al, 2    ; 2-4 blocks high
+    mov buildingHeight, al
+    
+    ; Check if total blocks > 5
+    mov al, buildingWidth
+    mul buildingHeight
+    cmp ax, 5
+    jg drawBuilding  ; If > 5 blocks, draw it
+    
+    ; If too small, adjust to ensure > 5 blocks
+    mov al, buildingWidth
+    cmp al, 3
+    jbe increaseWidth
+    jmp checkHeight
+    
+increaseWidth:
+    mov buildingWidth, 4
+    
+checkHeight:
+    mov al, buildingHeight
+    cmp al, 2
+    jbe increaseHeight
+    jmp drawBuilding
+    
+increaseHeight:
+    mov buildingHeight, 3
+    
+drawBuilding:
+    ; Draw the building
+    movzx ecx, buildingHeight
+    mov i, 0
+heightLoop:
+    push ecx
+    movzx ecx, buildingWidth
+    mov j, 0
+widthLoop:
+        push ecx
+        
+        ; Calculate position
+        mov dl, buildingX
+        add dl, j
+        mov dh, buildingY
+        add dh, i
+        
+        ; Check if within wall boundaries
+        cmp dl, 10
+        jle skipBlock
+        cmp dl, 110
+        jge skipBlock
+        cmp dh, 5
+        jle skipBlock
+        cmp dh, 27
+        jge skipBlock
+        
+        ; Draw the block
+        call Gotoxy
+        mov al, 219
+        call WriteChar
+        
+    skipBlock:
+        pop ecx
+        inc j
+        loop widthLoop
+    
+    pop ecx
+    inc i
+    loop heightLoop
+    
+    pop ecx
+    dec ecx
+    jnz buildingLoop
+    
+    ; Reset to default color
+    mov eax, white + (black * 16)
+    call SetTextColor
+    
+    ret
+DrawBuildings ENDP
+
+
 
 
 ; =============================================
@@ -1544,17 +1631,16 @@ DrawScoreboard PROC ;procedure to draw scoreboard
 DrawScoreboard ENDP
 
 
-; ChooseSpeed removed — speed is fixed at game start (no prompt)
-
+; =============================================
+; DrawPlayer    esi = index of player to draw
+; =============================================
 DrawPlayer     PROC ; draw player (taxi) at (xPos,yPos) in yellow
-    ; set yellow color
-    mov  eax, yellow + (black * 16)
-    call SetTextColor
+    call SetDynamicColor_WRY
 
     mov  dl, xPos[esi]
     mov  dh, yPos[esi]
     call Gotoxy
-    mov  al, car[esi]
+    mov  al, car
     call WriteChar
 
     ; restore white color
@@ -1563,6 +1649,10 @@ DrawPlayer     PROC ; draw player (taxi) at (xPos,yPos) in yellow
     ret
 DrawPlayer   ENDP
 
+
+; =============================================
+; UpdatePlayer - erase player at (xPos,yPos)  esi = index of player to erase 
+; =============================================
 UpdatePlayer PROC ; erase player at (xPos,yPos)
     mov  dl, xPos[esi]
     mov  dh, yPos[esi]
@@ -1572,73 +1662,80 @@ UpdatePlayer PROC ; erase player at (xPos,yPos)
     ret
 UpdatePlayer ENDP
 
+
+
+
+; =============================================
+; DrawCoin - draws coin at (xCoinPos,yCoinPos)
+; =============================================
 DrawCoin     PROC ;procedure to draw coin
-	mov  eax, yellow (yellow * 16)
-	call SetTextColor              ;set color to yellow for coin
+	mov  eax, blue (blue * 16)
+	call SetTextColor            ;set color to yellow for coin
 	mov  dl,  xCoinPos
 	mov  dh,  yCoinPos
 	call Gotoxy
 	mov  al,  "X"
 	call WriteChar
-	mov  eax, white (black * 16)   ;reset color to black and white
+	mov  eax, white (black * 16) ;reset color to black and white
 	call SetTextColor
 	ret
 DrawCoin         ENDP
 
+
+
+; =============================================
+; CreateRandomCoin - creates random coin position
+; =============================================
 CreateRandomCoin PROC ;procedure to create a random coin
     ; Generate X between (xPosWall[0]+1) .. (xPosWall[2]-1)
-    movzx ecx,      xPosWall[2]
-    movzx ebx,      xPosWall[0]
+    movzx ecx,      xPosWall[2] ; Right wall X (e.g., 110)         
+    movzx ebx,      xPosWall[0] ; Left wall X (e.g., 10)
     mov   eax,      ecx
-    sub   eax,      ebx
-    sub   eax,      1           ; W = right - left - 1
-    dec   eax                   ; pass W-1 to RandomRange to get 0..W-1
-    call  RandomRange
-    add   eax,      ebx
-    inc   eax                   ; now EAX in [left+1 .. right-1]
-    mov   xCoinPos, al
+    sub   eax,      ebx         ; 110 - 10 = 100 (total width)
+    sub   eax,      1           ; 100 - 1 = 99 (account for corners)1
+    dec   eax                   ; 99 - 1 = 98 (for RandomRange: 0..98)
+    call  RandomRange           ; Returns 0-98 in EAX
+    add   eax,      ebx         ; Add left wall: 10 + (0-98) = 10-108
+    inc   eax                   ; 11-109 (ensure inside walls)
+    mov   xCoinPos, al          ; Store final X position
 
     ; Generate Y between (yPosWall[0]+1) .. (yPosWall[3]-1)
-    movzx ecx,      yPosWall[3]
-    movzx ebx,      yPosWall[0]
+    movzx ecx,      yPosWall[3] ; Bottom wall Y (e.g., 27)
+    movzx ebx,      yPosWall[0] ; Top wall Y (e.g., 5)
     mov   eax,      ecx
-    sub   eax,      ebx
-    sub   eax,      1
-    dec   eax
-    call  RandomRange
-    add   eax,      ebx
-    inc   eax
-    mov   yCoinPos, al
+    sub   eax,      ebx         ; 27 - 5 = 22 (total height)
+    sub   eax,      1           ; 22 - 1 = 21 (account for corners)
+    dec   eax                   ; 21 - 1 = 20 (for RandomRange: 0..20)
+    call  RandomRange           ; Returns 0-20 in EAX
+    add   eax,      ebx         ; Add top wall: 5 + (0-20) = 5-25
+    inc   eax                   ; 6-26 (ensure inside walls)
+    mov   yCoinPos, al          ; Store final Y position
 
-    mov ecx, 5
-    add cl,  score ;loop number of car unit
+    mov ecx, 1 ; ECX = 1 (single-segment car)
     mov esi, 0
 checkCoinXPos:
     movzx eax, xCoinPos
-    cmp   al,  xPos[esi]
+    cmp   al,  xPos[esi] ; Compare coin X with car segment X position
     je    checkCoinYPos  ;jump if xPos of car at esi = xPos of coin
 continueloop:
-    inc  esi
-    loop checkCoinXPos
-    ret                ; return when coin is not on car
+    inc  esi           ; Move to next car segment (but there's only one!)
+    loop checkCoinXPos ; Decrement ECX and loop (ECX becomes 0, loop exits)
+    ret                ; Return when coin doesn't overlap with car
 checkCoinYPos:
-    movzx eax, yCoinPos
-    cmp   al,  yPos[esi]
-    jne   continueloop     ; jump back to continue loop if yPos of car at esi != yPos of coin
+    movzx eax, yCoinPos    ; Load coin Y position
+    cmp   al,  yPos[esi]   ; Compare coin Y with car segment Y position
+    jne   continueloop     ; If Y doesn't match, continue to next segment (but there are no more!)
     call  CreateRandomCoin ; coin generated on car, calling function again to create another set of coordinates
 CreateRandomCoin ENDP
 
-CheckCar         PROC ;check whether the car head collides w its body 
-    ; No self-collision check needed for single-segment car
-    ret
-CheckCar ENDP
 
-DrawBody PROC ;procedure to print body of the car
-    ; No body rendering - car is represented by a single 'T' (head only)
-        ret
-DrawBody   ENDP
 
-EatingCoin PROC
+
+
+; =============================================
+; EatingCoin - handles when car eats coin
+; =============================================
+EatingCoin       PROC
     ; car is eating coin - single 'T' car: just increase score and respawn coin
     inc  score
     call CreateRandomCoin
@@ -1653,6 +1750,11 @@ EatingCoin PROC
 EatingCoin ENDP
 
 
+
+
+; =============================================
+; YouDied - handles when player dies
+; =============================================
 YouDied    PROC
 	mov  eax, 1000
 	call delay
@@ -1700,6 +1802,11 @@ YouDied    PROC
 	jmp  retry                    ;let user input again
 YouDied          ENDP
 
+
+
+; =============================================
+; ReinitializeGame - resets game state for a new game
+; =============================================
 ReinitializeGame PROC ;procedure to reinitialize everything
     mov  xPos[0],   15
     mov  yPos[0],   15
