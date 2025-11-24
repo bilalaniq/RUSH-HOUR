@@ -15,6 +15,29 @@ INCLUDELIB   user32.lib
 ; =============================================
 .data
 
+
+boxPositions BYTE 14 DUP(0)  ; 7 boxes × 2 bytes (X,Y)
+treePositions BYTE 14 DUP(0) ; 7 trees × 2 bytes (X,Y)
+boxCount BYTE 0
+treeCount BYTE 0
+
+boxChar BYTE 'B'    ; Simple character for box
+treeChar BYTE 157  ; Simple character for tree
+
+
+  ; =============================================
+; NPC Data
+; =============================================
+npcX          BYTE ?        ; NPC current X position
+npcY          BYTE ?        ; NPC current Y position  
+npcTargetX    BYTE ?        ; NPC target X position
+npcTargetY    BYTE ?        ; NPC target Y position
+npcMoves      BYTE 0        ; Counter for NPC movement
+npcChar       BYTE 'C'      ; NPC character
+npcColor      DWORD cyan + (black * 16)  ; NPC color
+
+
+
 ; Building position storage - tracks all placed buildings
 buildingPositions BYTE 200 DUP(0)  ; Stores X,Y pairs for each building block
 buildingCountPlaced BYTE 0         ; Number of buildings actually placed
@@ -65,6 +88,11 @@ yPosWall BYTE 5,27,5,27
 
 xCoinPos     BYTE ?
 yCoinPos     BYTE ?
+
+; Passenger storage (5 passengers × 2 bytes: X,Y)
+passengerPositions BYTE 10 DUP(0)
+passengerCount BYTE 0
+passengerChar BYTE 'P'
 
 inputChar    BYTE "+"                                                 ; + denotes the start of the game
 ; lastInputChar removed (unused)
@@ -350,6 +378,9 @@ start_new_game:
     ; Fixed movement speed (milliseconds) — no user prompt
     mov eax,   5   ; faster: 15 ms delay per move
     mov speed, eax
+
+    ; call InitializeNPC
+    ; call DrawNPCplayer 
 
     jmp drawCar ;start the game flow (draw car and enter game loop)
     
@@ -1194,43 +1225,6 @@ WaitForKey ENDP
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-; ; =============================================
-; ; FlushKeys - consume any pending keypresses (handles extended keys)
-; ; Ensures only a single key is processed per move (prevents diagonal input)
-; ; Uses Irvine32 ReadKey: when no key available ZF is set.
-; ; =============================================
-
-; FlushKeys:
-; Flush_loop:
-;     call ReadKey
-;     jz   Flush_done        ; no key available → done
-;     cmp  al, 0
-;     je   Flush_consume_ext ; extended key prefix — consume scan code
-;     jmp  Flush_loop
-; Flush_consume_ext:
-;     call ReadKey
-;     jz   Flush_done
-;     jmp  Flush_loop
-; Flush_done:
-;     ret
-
-
 ; =============================================
 ; drawCar - Main Game Loop
 ; ============================================
@@ -1245,11 +1239,21 @@ drawCar_loop:
     call Randomize
     call CreateRandomCoin
     call DrawCoin         ; set up finish
+    call GenerateBoxesAndTrees
+    call DrawBoxesAndTrees
+    call CreatePassengers
+    call DrawPassengers
 
     gameLoop::
     mov  dl, 106 ;move cursor to coordinates where it is safe so no overlap occurs
     mov  dh, 1
     call Gotoxy
+
+    ; Add these two lines:
+    ; call UpdateNPC
+    ; call CheckPlayerNPCCollision
+    ; cmp al, 1
+    ; je died          ; Player dies if hits NPC
 
     ; get user key input
     call ReadKey  ; No Key Pressed → ZF = 1 (Zero Flag SET) on Key Pressed call ReadKey → ZF = 0 (Zero Flag CLEAR)
@@ -1355,14 +1359,24 @@ checkTop:
 
     ; Post-move handling (coin check only for single-head car)
     checkcoin:
-        mov  al, xPos[0]
-        cmp  al, xCoinPos
-        jne  no_eat
-        mov  al, yPos[0]
-        cmp  al, yCoinPos
-        jne  no_eat
-        call EatingCoin
-        jmp  gameLoop
+    ; Check box collision
+    ;call CheckPlayerBoxCollision
+    cmp al, 1
+    je died
+    
+    ; Check tree collision  
+    ;call CheckPlayerTreeCollision
+    cmp al, 1
+    je died
+    
+    mov  al, xPos[0]
+    cmp  al, xCoinPos
+    jne  no_eat
+    mov  al, yPos[0]
+    cmp  al, yCoinPos
+    jne  no_eat
+    call EatingCoin
+    jmp  gameLoop
 
     no_eat:
         jmp gameLoop
@@ -1629,6 +1643,7 @@ widthLoop:
 DrawBuildings ENDP
 
 
+
 ; =============================================
 ; IsBuilding - checks if a position contains a building
 ; Input: DL = X position, DH = Y position
@@ -1662,10 +1677,12 @@ checkLoop:
     cmp dl, al
     jl nextBuilding      ; posX < buildingX → not in building
     
-    mov bh, al           ; Save buildingX in BH temporarily
-    add bh, bl           ; BH = buildingX + width
-    dec bh               ; BH = buildingX + width - 1 (right boundary)
-    cmp dl, bh
+    push bx              ; Save width and height
+    mov bl, al           ; Copy buildingX to BL
+    add bl, [esi+2]      ; BL = buildingX + width
+    dec bl               ; BL = buildingX + width - 1 (right boundary)
+    cmp dl, bl
+    pop bx               ; Restore width and height
     jg nextBuilding      ; posX > right boundary → not in building
     
     ; Check if position Y is within building's Y range
@@ -1673,10 +1690,12 @@ checkLoop:
     cmp dh, ah
     jl nextBuilding      ; posY < buildingY → not in building
     
-    mov bl, ah           ; Save buildingY in BL temporarily  
-    add bl, bh           ; BL = buildingY + height (using original BH value)
+    push bx              ; Save width and height
+    mov bl, ah           ; Copy buildingY to BL
+    add bl, [esi+3]      ; BL = buildingY + height
     dec bl               ; BL = buildingY + height - 1 (bottom boundary)
     cmp dh, bl
+    pop bx               ; Restore width and height
     jg nextBuilding      ; posY > bottom boundary → not in building
     
     ; If we get here, position is inside the building!
@@ -1719,6 +1738,703 @@ IsBuilding ENDP
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+; =============================================
+; GenerateBoxesAndTrees - Generate 7 boxes and 7 trees
+; =============================================
+GenerateBoxesAndTrees PROC
+    ; Generate 7 boxes
+    mov ecx, 7
+generate_boxes:
+    push ecx
+    
+    ; Generate random X position (11-109) - inside walls
+    mov eax, 98     ; 109-11 = 98 (11 to 109 inclusive)
+    call RandomRange
+    add al, 11
+    mov bl, al      ; BL = box X
+    
+    ; Generate random Y position (6-26) - inside walls  
+    mov eax, 20     ; 26-6 = 20 (6 to 26 inclusive)
+    call RandomRange
+    add al, 6
+    mov bh, al      ; BH = box Y
+    
+    ; Store box position
+    mov esi, OFFSET boxPositions
+    movzx eax, boxCount
+    add esi, eax
+    add esi, eax    ; ×2 for X,Y pairs
+    
+    mov [esi], bl   ; Store X
+    mov [esi+1], bh ; Store Y
+    
+    inc boxCount
+    pop ecx
+    loop generate_boxes
+    
+    ; Generate 7 trees
+    mov ecx, 7
+generate_trees:
+    push ecx
+    
+    ; Generate random X position (11-109) - inside walls
+    mov eax, 98     ; 109-11 = 98 (11 to 109 inclusive)
+    call RandomRange
+    add al, 11
+    mov bl, al      ; BL = tree X
+    
+    ; Generate random Y position (6-26) - inside walls
+    mov eax, 20     ; 26-6 = 20 (6 to 26 inclusive)
+    call RandomRange
+    add al, 6
+    mov bh, al      ; BH = tree Y
+    
+    ; Store tree position
+    mov esi, OFFSET treePositions
+    movzx eax, treeCount
+    add esi, eax
+    add esi, eax    ; ×2 for X,Y pairs
+    
+    mov [esi], bl   ; Store X
+    mov [esi+1], bh ; Store Y
+    
+    inc treeCount
+    pop ecx
+    loop generate_trees
+    
+    ret
+GenerateBoxesAndTrees ENDP
+
+; =============================================
+; Draw boxes and trees
+; =============================================
+DrawBoxesAndTrees PROC
+    ; Draw boxes in gray
+    mov eax, gray + (black * 16)
+    call SetTextColor
+    
+    mov esi, OFFSET boxPositions
+    movzx ecx, boxCount
+    cmp ecx, 0
+    je draw_trees
+    
+draw_boxes:
+    mov dl, [esi]   ; X position
+    mov dh, [esi+1] ; Y position
+    call Gotoxy
+    mov al, boxChar
+    call WriteChar
+    add esi, 2
+    loop draw_boxes
+
+draw_trees:
+    ; Draw trees in green
+    mov eax, green + (black * 16)
+    call SetTextColor
+    
+    mov esi, OFFSET treePositions
+    movzx ecx, treeCount
+    cmp ecx, 0
+    je done_drawing
+    
+draw_trees_loop:
+    mov dl, [esi]   ; X position
+    mov dh, [esi+1] ; Y position
+    call Gotoxy
+    mov al, treeChar
+    call WriteChar
+    add esi, 2
+    loop draw_trees_loop
+
+done_drawing:
+    ; Reset to default color
+    mov eax, white + (black * 16)
+    call SetTextColor
+    ret
+DrawBoxesAndTrees ENDP
+
+
+; =============================================
+; CreatePassengers - create 5 passengers avoiding buildings, coin, boxes and trees
+; Generates positions inside walls and stores them in passengerPositions
+; =============================================
+CreatePassengers PROC
+    mov passengerCount, 0
+    mov ecx, 5              ; create 5 passengers
+
+create_each_passenger:
+    push ecx
+    mov edi, 0              ; attempt counter for this passenger
+
+gen_try_position:
+    inc edi
+    cmp edi, 200            ; give up after many tries
+    jge gen_force_store
+
+    ; Generate X between 11 and 109 (inside walls)
+    mov eax, 99
+    call RandomRange
+    add al, 11
+    mov bl, al              ; candidate X
+
+    ; Generate Y between 6 and 26 (inside walls)
+    mov eax, 21
+    call RandomRange
+    add al, 6
+    mov bh, al              ; candidate Y
+
+    ; Check building
+    mov dl, bl
+    mov dh, bh
+    call IsBuilding
+    cmp al, 1
+    je gen_try_position     ; retry if inside building
+
+    ; Check coin
+    mov al, bl
+    cmp al, xCoinPos
+    jne coin_ok
+    mov al, bh
+    cmp al, yCoinPos
+    je gen_try_position     ; retry if matches coin
+    
+coin_ok:
+    ; Check box
+    mov dl, bl
+    mov dh, bh
+    call IsBox
+    cmp al, 1
+    je gen_try_position     ; retry if on box
+
+    ; Check tree
+    mov dl, bl
+    mov dh, bh
+    call IsTree
+    cmp al, 1
+    je gen_try_position     ; retry if on tree
+
+    ; Position valid — store it and move to next passenger
+    mov esi, OFFSET passengerPositions
+    movzx eax, passengerCount
+    add esi, eax
+    add esi, eax            ; ×2 for X,Y pairs
+    mov [esi], bl
+    mov [esi+1], bh
+    inc passengerCount
+    pop ecx
+    dec ecx
+    jnz create_each_passenger
+    ret
+
+gen_force_store:
+    ; If we couldn't find a free spot, place at a safe default
+    mov bl, 60
+    mov bh, 15
+    mov esi, OFFSET passengerPositions
+    movzx eax, passengerCount
+    add esi, eax
+    add esi, eax
+    mov [esi], bl
+    mov [esi+1], bh
+    inc passengerCount
+    pop ecx
+    dec ecx
+    jnz create_each_passenger
+    ret
+CreatePassengers ENDP
+
+
+
+; =============================================
+; DrawPassengers - draws all passengers on screen
+; =============================================
+DrawPassengers PROC
+    ; Check if any passengers exist
+    mov al, passengerCount
+    cmp al, 0
+    je done_drawing_passengers
+    
+    ; Set color for passengers (magenta)
+    mov eax, magenta + (black * 16)
+    call SetTextColor
+    
+    ; Draw all passengers
+    mov esi, OFFSET passengerPositions
+    movzx ecx, passengerCount
+    
+draw_passengers_loop:
+    mov dl, [esi]   ; X position
+    mov dh, [esi+1] ; Y position
+    call Gotoxy
+    mov al, passengerChar ; 'P'
+    call WriteChar
+    add esi, 2
+    loop draw_passengers_loop
+
+done_drawing_passengers:
+    ; Reset to default color
+    mov eax, white + (black * 16)
+    call SetTextColor
+    ret
+DrawPassengers ENDP
+
+
+
+; =============================================
+; IsBox - checks if a position contains a box
+; Input: DL = X position, DH = Y position
+; Returns: AL = 1 if box, AL = 0 if not box
+; =============================================
+IsBox PROC
+    ; Check if any boxes exist
+    mov al, boxCount
+    cmp al, 0
+    je noBox
+    
+    ; Check each box
+    mov esi, OFFSET boxPositions
+    movzx ecx, boxCount
+    
+checkBoxLoop:
+    mov al, [esi]       ; Box X
+    mov ah, [esi+1]     ; Box Y
+    
+    cmp dl, al          ; Compare X position
+    jne nextBox
+    cmp dh, ah          ; Compare Y position
+    jne nextBox
+    
+    ; Position matches box
+    mov al, 1
+    ret
+    
+nextBox:
+    add esi, 2
+    loop checkBoxLoop
+    
+noBox:
+    mov al, 0
+    ret
+IsBox ENDP
+
+; =============================================
+; IsTree - checks if a position contains a tree
+; Input: DL = X position, DH = Y position
+; Returns: AL = 1 if tree, AL = 0 if not tree
+; =============================================
+IsTree PROC
+    ; Check if any trees exist
+    mov al, treeCount
+    cmp al, 0
+    je noTree
+    
+    ; Check each tree
+    mov esi, OFFSET treePositions
+    movzx ecx, treeCount
+    
+checkTreeLoop:
+    mov al, [esi]       ; Tree X
+    mov ah, [esi+1]     ; Tree Y
+    
+    cmp dl, al          ; Compare X position
+    jne nextTree
+    cmp dh, ah          ; Compare Y position
+    jne nextTree
+    
+    ; Position matches tree
+    mov al, 1
+    ret
+    
+nextTree:
+    add esi, 2
+    loop checkTreeLoop
+    
+noTree:
+    mov al, 0
+    ret
+IsTree ENDP
+
+
+
+
+; Example 1: Check if player is on a box
+; mov dl, xPos[0]
+; mov dh, yPos[0]
+; call IsBox
+; cmp al, 1
+; je handleBoxCollision
+
+
+; Example 2: Check if player is on a tree
+; mov dl, xPos[0]
+; mov dh, yPos[0]
+; call IsTree
+; cmp al, 1
+; je handleTreeCollision
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+; =============================================
+; InitializeNPC - sets up initial NPC position
+; =============================================
+InitializeNPC PROC
+    call GenerateValidNPCPosition
+    mov npcX, al
+    mov npcY, ah
+    call SetNPCTarget  ; Set initial target
+    ret
+InitializeNPC ENDP
+
+; =============================================
+; GenerateValidNPCPosition - finds valid spawn position
+; Returns: AL = X, AH = Y
+; =============================================
+GenerateValidNPCPosition PROC
+    LOCAL attempts:BYTE
+    mov attempts, 0
+    
+generate_again:
+    inc attempts
+    cmp attempts, 50
+    jg use_default
+    
+    ; Generate X between 11 and 109 (inside walls)
+    mov eax, 99      ; 109-11+1 = 99 possible positions
+    call RandomRange
+    add al, 11       ; 11 + (0-98) = 11-109
+    mov bl, al       ; Save X in BL
+    
+    ; Generate Y between 6 and 26 (inside walls)
+    mov eax, 21      ; 26-6+1 = 21 possible positions
+    call RandomRange
+    add al, 6        ; 6 + (0-20) = 6-26
+    mov bh, al       ; Save Y in BH
+    
+    ; Check if position overlaps with player
+    mov dl, bl
+    mov dh, bh
+    cmp dl, xPos[0]     ; Compare with player X
+    jne position_ok
+    cmp dh, yPos[0]     ; Compare with player Y
+    je generate_again   ; If same position, regenerate
+    
+position_ok:
+    ; Check if position is in building
+    call IsBuilding
+    cmp al, 1
+    je generate_again   ; If in building, regenerate
+    
+    ; Position is valid
+    mov al, bl
+    mov ah, bh
+    ret
+    
+use_default:
+    mov al, 60      ; Default X
+    mov ah, 15      ; Default Y
+    ret
+GenerateValidNPCPosition ENDP
+
+; =============================================
+; SetNPCTarget - sets new random target for NPC
+; =============================================
+SetNPCTarget PROC
+    LOCAL attempts:BYTE
+    mov attempts, 0
+    
+target_again:
+    inc attempts
+    cmp attempts, 50
+    jg default_target
+    
+    ; Generate target X between 11 and 109
+    mov eax, 99
+    call RandomRange
+    add al, 11
+    mov bl, al
+    
+    ; Generate target Y between 6 and 26  
+    mov eax, 21
+    call RandomRange
+    add al, 6
+    mov bh, al
+    
+    ; Don't allow target too close to current position
+    mov al, npcX
+    sub al, bl
+    jns check_x_diff
+    neg al
+check_x_diff:
+    cmp al, 5        ; Minimum 5 units X difference
+    jb target_again
+    
+    mov al, npcY
+    sub al, bh
+    jns check_y_diff
+    neg al
+check_y_diff:
+    cmp al, 3        ; Minimum 3 units Y difference
+    jb target_again
+    
+    ; Check if target position is valid (not in building)
+    mov dl, bl
+    mov dh, bh
+    call IsBuilding
+    cmp al, 1
+    je target_again
+    
+    ; Target is valid
+    mov npcTargetX, bl
+    mov npcTargetY, bh
+    ret
+    
+default_target:
+    ; Set default target opposite side
+    mov al, npcX
+    cmp al, 60
+    jl set_right_target
+    
+set_left_target:
+    mov npcTargetX, 20
+    mov npcTargetY, 15
+    ret
+    
+set_right_target:
+    mov npcTargetX, 100
+    mov npcTargetY, 15
+    ret
+SetNPCTarget ENDP
+
+; =============================================
+; UpdateNPC - moves NPC toward target
+; =============================================
+UpdateNPC PROC
+    ; Erase current NPC position
+    mov dl, npcX
+    mov dh, npcY
+    call Gotoxy
+    mov al, ' '
+    call WriteChar
+
+    ; Alternate movement axis each tick using npcMoves (prevents diagonal jitter)
+    inc byte ptr npcMoves
+    mov al, npcMoves
+    and al, 1
+    cmp al, 0
+    je move_x_axis
+
+    ; --- Move Y axis only this tick ---
+move_y_axis:
+    mov al, npcY
+    cmp al, npcTargetY
+    je after_move
+    jl do_move_down
+    dec npcY
+    jmp after_move
+
+do_move_down:
+    inc npcY
+    jmp after_move
+
+    ; --- Move X axis only this tick ---
+move_x_axis:
+    mov al, npcX
+    cmp al, npcTargetX
+    je after_move
+    jl do_move_right
+    dec npcX
+    jmp after_move
+
+do_move_right:
+    inc npcX
+
+after_move:
+    ; Keep NPC inside walls
+    call CheckNPCWallCollision
+
+    ; If reached both X and Y, pick a new target
+    mov al, npcX
+    cmp al, npcTargetX
+    jne draw_and_ret
+    mov al, npcY
+    cmp al, npcTargetY
+    jne draw_and_ret
+    call SetNPCTarget
+
+draw_and_ret:
+    call DrawNPCplayer
+    ret
+UpdateNPC ENDP
+
+; =============================================
+; CheckNPCWallCollision - keeps NPC within walls
+; =============================================
+CheckNPCWallCollision PROC
+    ; Check left wall (X = 10)
+    mov al, npcX
+    cmp al, 11
+    jg check_right_wall
+    mov npcX, 11
+    jmp check_y_walls
+    
+check_right_wall:
+    cmp al, 109
+    jl check_y_walls
+    mov npcX, 109
+    
+check_y_walls:
+    ; Check top wall (Y = 5)
+    mov al, npcY
+    cmp al, 6
+    jg check_bottom_wall
+    mov npcY, 6
+    ret
+    
+check_bottom_wall:
+    cmp al, 26
+    jl walls_ok
+    mov npcY, 26
+    
+walls_ok:
+    ret
+CheckNPCWallCollision ENDP
+
+; =============================================
+; DrawNPCplayer - draws the NPC car
+; =============================================
+DrawNPCplayer PROC
+    mov eax, npcColor
+    call SetTextColor
+    
+    mov dl, npcX
+    mov dh, npcY
+    call Gotoxy
+    mov al, npcChar
+    call WriteChar
+    
+    mov eax, white + (black * 16)
+    call SetTextColor
+    ret 
+DrawNPCplayer ENDP
+
+; =============================================
+; CheckPlayerNPCCollision - checks if player hits NPC
+; Returns: AL = 1 if collision, AL = 0 if not
+; =============================================
+CheckPlayerNPCCollision PROC
+    mov al, xPos[0]
+    cmp al, npcX
+    jne no_collision
+    mov al, yPos[0]
+    cmp al, npcY
+    jne no_collision
+    
+    ; Collision detected
+    mov al, 1
+    ret
+    
+no_collision:
+    mov al, 0
+    ret
+CheckPlayerNPCCollision ENDP
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ; =============================================
 ; DrawScoreboard - draws the scoreboard
 ; =============================================
@@ -1753,12 +2469,7 @@ DrawPlayer     PROC ; draw player (taxi) at (xPos,yPos) in yellow
 DrawPlayer   ENDP
 
 
-; =============================================
-; DrawNPC
-; =============================================
-DrawNPC    PROC ; draw NPC at (xNPCPos,yNPCPos) in red
-  
-DrawNPC   ENDP
+
 
 
 
@@ -1782,18 +2493,18 @@ UpdatePlayer ENDP
 ; =============================================
 ; DrawCoin - draws coin at (xCoinPos,yCoinPos)
 ; =============================================
-DrawCoin     PROC ;procedure to draw coin
-	mov  eax, blue (blue * 16)
-	call SetTextColor            ;set color to yellow for coin
-	mov  dl,  xCoinPos
-	mov  dh,  yCoinPos
-	call Gotoxy
-	mov  al,  "X"
-	call WriteChar
-	mov  eax, white (black * 16) ;reset color to black and white
-	call SetTextColor
-	ret
-DrawCoin         ENDP
+DrawCoin PROC
+    mov  eax, blue + (blue * 16)    ; FIXED: was "blue (blue * 16)"
+    call SetTextColor
+    mov  dl, xCoinPos
+    mov  dh, yCoinPos
+    call Gotoxy
+    mov  al, "X"
+    call WriteChar
+    mov  eax, white + (black * 16)   ; FIXED: was "white (black * 16)"
+    call SetTextColor
+    ret
+DrawCoin ENDP
 
 
 
@@ -1930,16 +2641,19 @@ YouDied          ENDP
 ; =============================================
 ; ReinitializeGame - resets game state for a new game
 ; =============================================
-ReinitializeGame PROC ;procedure to reinitialize everything
-    mov  xPos[0],   15
-    mov  yPos[0],   15
-    mov  score,     0   ;reinitialize score
-    mov  inputChar, "+" ;reinitialize inputChar
-    ; (Do not modify wall coordinates here) - keep wall size stable
+ReinitializeGame PROC 
+    mov  xPos[0],   11
+    mov  yPos[0],   6
+    mov  score,     0   
+    mov  inputChar, "+" 
+    
+    ; Reset box and tree counts
+    mov boxCount, 0
+    mov treeCount, 0
+    
     Call ClrScr
-    jmp  main           ;start over the game
+    jmp  main           
 ReinitializeGame ENDP
-
 
 
 
