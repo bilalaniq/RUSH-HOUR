@@ -16,6 +16,9 @@ INCLUDELIB   user32.lib
 .data
 
 
+
+
+
 boxPositions BYTE 14 DUP(0)  ; 7 boxes × 2 bytes (X,Y)
 treePositions BYTE 14 DUP(0) ; 7 trees × 2 bytes (X,Y)
 boxCount BYTE 0
@@ -126,6 +129,33 @@ speed        DWORD 0
     prompt2 BYTE "                     Please choose any car you like (1-3): ",                0
     prompt3 BYTE "                     Please enter player Name (show be with in 20 words): ", 0
 
+
+
+; Add these to your .data section:
+instructions_title    BYTE "              RUSH HOUR TAXI - INSTRUCTIONS", 0
+controls_title       BYTE "CONTROLS:", 0
+control_arrows       BYTE "  Arrow Keys - Move taxi (Up, Down, Left, Right)", 0
+control_space        BYTE "  Spacebar   - Pick up/Drop off passengers", 0
+control_pause        BYTE "  P          - Pause game", 0
+
+gameplay_title       BYTE "HOW TO PLAY:", 0
+gameplay1            BYTE "  1. Find passengers (P) and press SPACE to pick up", 0
+gameplay2            BYTE "  2. Drive to green destination and SPACE to drop off", 0
+gameplay3            BYTE "  3. Avoid NPC cars and collect bonus items (X)", 0
+
+scoring_title        BYTE "SCORING:", 0
+score_passenger      BYTE "  +10 points - Deliver passenger to destination", 0
+score_bonus          BYTE "  +10 points - Collect bonus items (X)", 0
+score_penalty        BYTE "  -5 points  - Hit a pedestrian", 0
+
+taxi_title          BYTE "TAXI DIFFERENCES:", 0
+red_taxi            BYTE "  Red Taxi    : -2 pts (obstacles), -3 pts (cars)", 0
+yellow_taxi         BYTE "  Yellow Taxi : -4 pts (obstacles), -2 pts (cars)", 0
+
+pressAnyKey         BYTE "Press any key to return to main menu...", 0
+
+
+
     PlayerName BYTE 20 DUP(0)
 
     highscoresFile    BYTE "highscores.txt", 0
@@ -162,7 +192,6 @@ speed        DWORD 0
 
     ; Error messages
     invalidChoice   BYTE "Invalid choice!",                         0
-    pressAnyKey     BYTE "Press any key to continue...",            0
     invalidNameSize BYTE "The name cannot be longer than 19 words", 0
 
     nameAcceptedMsg BYTE "Name accepted successfully!", 0
@@ -1170,14 +1199,101 @@ DifficultyScreen   PROC
     ret
 DifficultyScreen   ENDP
 
-
 InstructionsScreen PROC
     call Clrscr
-    mov  edx, OFFSET instructionsMsg
+    
+    ; Display title
+    mov  eax, cyan + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET instructions_title
     call WriteString
     call Crlf
-    call WaitForKey
+    call Crlf
+    
+    ; Basic Controls
+    mov  eax, yellow + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET controls_title
+    call WriteString
+    call Crlf
+    
+    mov  eax, white + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET control_arrows
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET control_space
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET control_pause
+    call WriteString
+    call Crlf
+    call Crlf
+    
+    ; Gameplay Instructions
+    mov  eax, green + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET gameplay_title
+    call WriteString
+    call Crlf
+    
+    mov  eax, white + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET gameplay1
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET gameplay2
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET gameplay3
+    call WriteString
+    call Crlf
+    call Crlf
+    
+    ; Scoring System
+    mov  eax, lightGreen + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET scoring_title
+    call WriteString
+    call Crlf
+    
+    mov  eax, white + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET score_passenger
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET score_bonus
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET score_penalty
+    call WriteString
+    call Crlf
+    call Crlf
+    
+    ; Taxi Differences
+    mov  eax, lightBlue + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET taxi_title
+    call WriteString
+    call Crlf
+    
+    mov  eax, white + (black * 16)
+    call SetTextColor
+    mov  edx, OFFSET red_taxi
+    call WriteString
+    call Crlf
+    mov  edx, OFFSET yellow_taxi
+    call WriteString
+    call Crlf
+    call Crlf
+    
+    mov  edx, OFFSET pressAnyKey
+    call WriteString
+    call ReadChar
     ret
+
+
+
 InstructionsScreen ENDP
 
 ExitScreen         PROC
@@ -1649,6 +1765,11 @@ DrawBuildings ENDP
 ; Input: DL = X position, DH = Y position
 ; Returns: AL = 1 if building, AL = 0 if not building
 ; =============================================
+; =============================================
+; IsBuilding - checks if a position contains ANY PART of a building
+; Input: DL = X position, DH = Y position
+; Returns: AL = 1 if building, AL = 0 if not building
+; =============================================
 IsBuilding PROC
     ; Check if any buildings exist
     mov al, buildingCountPlaced
@@ -1661,8 +1782,8 @@ IsBuilding PROC
     
 checkLoop:
     ; Load building data
-    mov al, [esi]        ; Building X (left)
-    mov ah, [esi+1]      ; Building Y (top)  
+    mov al, [esi]        ; Building X (top-left)
+    mov ah, [esi+1]      ; Building Y (top-left)  
     mov bl, [esi+2]      ; Building width
     mov bh, [esi+3]      ; Building height
     
@@ -1703,7 +1824,7 @@ checkLoop:
     ret
     
 nextBuilding:
-    add esi, 4
+    add esi, 4           ; Move to next building (4 bytes each)
     loop checkLoop
     
 noBuilding:
@@ -1865,96 +1986,215 @@ done_drawing:
 DrawBoxesAndTrees ENDP
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ; =============================================
-; CreatePassengers - create 5 passengers avoiding buildings, coin, boxes and trees
-; Generates positions inside walls and stores them in passengerPositions
+; CreatePassengers - creates 5 passenger positions with retry logic
 ; =============================================
 CreatePassengers PROC
     mov passengerCount, 0
-    mov ecx, 5              ; create 5 passengers
+    mov ecx, 5              ; Create 5 passengers
 
-create_each_passenger:
-    push ecx
-    mov edi, 0              ; attempt counter for this passenger
+create_passenger_loop:
+    push ecx                ; Save outer loop counter
+    mov  edi, 0             ; Retry counter
 
-gen_try_position:
-    inc edi
-    cmp edi, 200            ; give up after many tries
-    jge gen_force_store
+try_generate:
+    inc  edi
+    cmp  edi, 50            ; Max 50 attempts per passenger
+    jg   force_position     ; If too many failures, force a position
 
-    ; Generate X between 11 and 109 (inside walls)
-    mov eax, 99
+    ; Generate random position
+    call GenerateValidPosition
+    jc   try_generate       ; If carry set, position invalid - try again
+
+    ; Position is valid - store it
+    mov  esi, OFFSET passengerPositions
+    movzx eax, passengerCount
+    shl  eax, 1             ; Multiply by 2 (X,Y pairs)
+    add  esi, eax
+    
+    mov  [esi], bl          ; Store X
+    mov  [esi+1], bh        ; Store Y
+    inc  passengerCount
+    
+    pop  ecx
+    dec  ecx
+    jnz  create_passenger_loop
+    ret
+
+force_position:
+    ; Force a position after too many failed attempts
+    call GenerateForcedPosition
+    mov  esi, OFFSET passengerPositions
+    movzx eax, passengerCount
+    shl  eax, 1
+    add  esi, eax
+    
+    mov  [esi], bl
+    mov  [esi+1], bh
+    inc  passengerCount
+    
+    pop  ecx
+    dec  ecx
+    jnz  create_passenger_loop
+    ret
+
+CreatePassengers ENDP
+
+; =============================================
+; GenerateValidPosition - generates a valid position for passenger
+; Returns: BL = X, BH = Y, CF = 0 if valid, CF = 1 if invalid
+; =============================================
+GenerateValidPosition PROC
+    ; Generate X between 11-109
+    mov eax, 99             ; 109-11+1 = 99
     call RandomRange
     add al, 11
-    mov bl, al              ; candidate X
+    mov bl, al
 
-    ; Generate Y between 6 and 26 (inside walls)
-    mov eax, 21
+    ; Generate Y between 6-26
+    mov eax, 21             ; 26-6+1 = 21
     call RandomRange
     add al, 6
-    mov bh, al              ; candidate Y
+    mov bh, al
 
-    ; Check building
+    ; Check building collision
     mov dl, bl
     mov dh, bh
     call IsBuilding
     cmp al, 1
-    je gen_try_position     ; retry if inside building
+    je  invalid_position
 
-    ; Check coin
-    mov al, bl
-    cmp al, xCoinPos
-    jne coin_ok
-    mov al, bh
-    cmp al, yCoinPos
-    je gen_try_position     ; retry if matches coin
-    
-coin_ok:
-    ; Check box
+    ; Check box collision
     mov dl, bl
     mov dh, bh
     call IsBox
     cmp al, 1
-    je gen_try_position     ; retry if on box
+    je  invalid_position
 
-    ; Check tree
+    ; Check tree collision
     mov dl, bl
     mov dh, bh
     call IsTree
     cmp al, 1
-    je gen_try_position     ; retry if on tree
+    je  invalid_position
 
-    ; Position valid — store it and move to next passenger
+    ; Check coin collision
+    mov al, bl
+    cmp al, xCoinPos
+    jne check_player_collision
+    mov al, bh
+    cmp al, yCoinPos
+    je  invalid_position
+
+check_player_collision:
+    ; Check player collision
+    mov al, bl
+    cmp al, xPos[0]
+    jne check_existing_passengers
+    mov al, bh
+    cmp al, yPos[0]
+    je  invalid_position
+
+check_existing_passengers:
+    ; Check if position overlaps with existing passengers
     mov esi, OFFSET passengerPositions
-    movzx eax, passengerCount
-    add esi, eax
-    add esi, eax            ; ×2 for X,Y pairs
-    mov [esi], bl
-    mov [esi+1], bh
-    inc passengerCount
-    pop ecx
-    dec ecx
-    jnz create_each_passenger
+    movzx ecx, passengerCount
+    cmp ecx, 0
+    je  valid_position
+    
+check_passenger_loop:
+    mov al, [esi]
+    cmp al, bl
+    jne next_passenger_check
+    mov al, [esi+1]
+    cmp al, bh
+    je  invalid_position
+    
+next_passenger_check:
+    add esi, 2
+    loop check_passenger_loop
+
+valid_position:
+    clc                     ; Clear carry flag = valid
     ret
 
-gen_force_store:
-    ; If we couldn't find a free spot, place at a safe default
+invalid_position:
+    stc                     ; Set carry flag = invalid
+    ret
+GenerateValidPosition ENDP
+; =============================================
+; GenerateForcedPosition - generates a forced position when random fails
+; Returns: BL = X, BH = Y
+; =============================================
+GenerateForcedPosition PROC
+    ; Use predefined positions that are guaranteed to be within walls
+    ; Walls: X=11-109, Y=6-26
+    
+    movzx ecx, passengerCount
+    cmp ecx, 0
+    jne passenger_1
+    ; Position 0: center (within bounds: X=60, Y=15)
     mov bl, 60
     mov bh, 15
-    mov esi, OFFSET passengerPositions
-    movzx eax, passengerCount
-    add esi, eax
-    add esi, eax
-    mov [esi], bl
-    mov [esi+1], bh
-    inc passengerCount
-    pop ecx
-    dec ecx
-    jnz create_each_passenger
     ret
-CreatePassengers ENDP
-
-
+    
+passenger_1:
+    cmp ecx, 1
+    jne passenger_2
+    ; Position 1: right of center (X=70, Y=15)
+    mov bl, 70
+    mov bh, 15
+    ret
+    
+passenger_2:
+    cmp ecx, 2
+    jne passenger_3
+    ; Position 2: left of center (X=50, Y=15)
+    mov bl, 50
+    mov bh, 15
+    ret
+    
+passenger_3:
+    cmp ecx, 3
+    jne passenger_4
+    ; Position 3: above center (X=60, Y=10)
+    mov bl, 60
+    mov bh, 10
+    ret
+    
+passenger_4:
+    ; Position 4: below center (X=60, Y=20)
+    mov bl, 60
+    mov bh, 20
+    ret
+GenerateForcedPosition ENDP
 
 ; =============================================
 ; DrawPassengers - draws all passengers on screen
@@ -1988,6 +2228,28 @@ done_drawing_passengers:
     call SetTextColor
     ret
 DrawPassengers ENDP
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
