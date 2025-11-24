@@ -97,6 +97,12 @@ passengerPositions BYTE 10 DUP(0)
 passengerCount BYTE 0
 passengerChar BYTE 'P'
 
+; Passenger state tracking
+passengerStates BYTE 5 DUP(0)      ; 0=waiting, 1=picked up, 2=delivered
+currentPassenger BYTE 255          ; Index of currently carried passenger (255=none)
+pickedUpPassenger BYTE 0           ; Flag: 0=no passenger, 1=carrying passenger
+destinationColor BYTE 2            ; Green color for destination
+
 inputChar    BYTE "+"                                                 ; + denotes the start of the game
 ; lastInputChar removed (unused)
 speed        DWORD 0
@@ -397,19 +403,30 @@ ProcessMenuChoice PROC
 
 start_new_game:
     call SelectTaxiScreen
-    ; call EnterPlayer_Name
-    ;call start_game
+    call EnterPlayer_Name
+    ; call start_game
     call Clrscr
     call DrawWall         ;draw walls
     call DrawScoreboard   ;draw scoreboard
     call DrawBuildings
 
-    ; Fixed movement speed (milliseconds) — no user prompt
-    mov eax,   5   ; faster: 15 ms delay per move
+    ; Set speed based on taxi color
+    ; 1 = Red Taxi (slow: 15ms), 2 = Yellow Taxi (fast: 5ms)
+    cmp UserColourChoice, 1
+    je set_red_speed
+    
+    ; Default to yellow (fast speed)
+    mov eax, 5              ; Yellow taxi: 5ms per move (faster)
+    jmp speed_set
+
+set_red_speed:
+    mov eax, 15             ; Red taxi: 15ms per move (slower)
+
+speed_set:
     mov speed, eax
 
-    ; call InitializeNPC
-    ; call DrawNPCplayer 
+    call InitializeNPC
+    call DrawNPCplayer 
 
     jmp drawCar ;start the game flow (draw car and enter game loop)
     
@@ -1393,14 +1410,21 @@ drawCar_loop:
 normal_key:
     ; AL contains a normal ASCII key
     cmp al, 'p'
-    jne gameLoop
+    je pause_exit
+    cmp al, ' '             ; Spacebar for pickup/drop
+    je handle_spacebar
+    jmp gameLoop
 
+handle_spacebar:
+    call HandlePickupDrop
+    jmp gameLoop
+
+pause_exit:
     ; process 'p' (or other future normal keys) via storing and FlushKeys
-    mov  inputChar, al  ;assign variables (single-step movement)
-    ; call FlushKeys
-    cmp  inputChar, "p"
-    je   exitgame
-    jmp  gameLoop       ; reloop if no meaningful key was entered
+    mov inputChar, al       ;assign variables (single-step movement)
+    cmp inputChar, "p"
+    je exitgame
+    jmp gameLoop
 
 checkBottom: 	
     mov al, yPos[0]    ; Get current Y position
@@ -1441,6 +1465,8 @@ checkTop:
 		call UpdatePlayer
 		dec  yPos[esi]       ; Move up (Y = Y - 1) 
         call DrawPlayer
+        call DrawPassengers
+        call DrawCoin
         jmp  checkcoin
 
 		
@@ -1451,6 +1477,8 @@ checkTop:
 		call      UpdatePlayer
 		inc       yPos[esi]
         call      DrawPlayer
+        call DrawPassengers
+        call DrawCoin
         jmp       checkcoin
 
 
@@ -1461,6 +1489,8 @@ checkTop:
 		call      UpdatePlayer
 		dec       xPos[esi]
         call      DrawPlayer
+        call DrawPassengers
+        call DrawCoin
         jmp       checkcoin
 
 
@@ -1471,6 +1501,8 @@ checkTop:
 		call       UpdatePlayer
 		inc        xPos[esi]
         call       DrawPlayer
+        call DrawPassengers
+        call DrawCoin
         jmp        checkcoin
 
     ; Post-move handling (coin check only for single-head car)
@@ -2149,6 +2181,8 @@ invalid_position:
     stc                     ; Set carry flag = invalid
     ret
 GenerateValidPosition ENDP
+
+
 ; =============================================
 ; GenerateForcedPosition - generates a forced position when random fails
 ; Returns: BL = X, BH = Y
@@ -2197,7 +2231,7 @@ passenger_4:
 GenerateForcedPosition ENDP
 
 ; =============================================
-; DrawPassengers - draws all passengers on screen
+; DrawPassengers - draws waiting passengers only (picked up and delivered ones are hidden)
 ; =============================================
 DrawPassengers PROC
     ; Check if any passengers exist
@@ -2209,17 +2243,27 @@ DrawPassengers PROC
     mov eax, magenta + (black * 16)
     call SetTextColor
     
-    ; Draw all passengers
+    ; Draw only waiting passengers (state 0)
     mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
     movzx ecx, passengerCount
     
 draw_passengers_loop:
+    ; Check if passenger is waiting (state 0)
+    mov al, [edi]
+    cmp al, 0
+    jne skip_passenger_draw
+    
+    ; Draw waiting passenger
     mov dl, [esi]   ; X position
     mov dh, [esi+1] ; Y position
     call Gotoxy
     mov al, passengerChar ; 'P'
     call WriteChar
+
+skip_passenger_draw:
     add esi, 2
+    inc edi
     loop draw_passengers_loop
 
 done_drawing_passengers:
@@ -2753,17 +2797,29 @@ UpdatePlayer ENDP
 
 
 ; =============================================
-; DrawCoin - draws coin at (xCoinPos,yCoinPos)
+; DrawCoin - draws destination at (xCoinPos,yCoinPos)
+; GREEN when passenger picked up, BLUE otherwise
 ; =============================================
 DrawCoin PROC
-    mov  eax, blue + (blue * 16)    ; FIXED: was "blue (blue * 16)"
+    ; Check if carrying a passenger - if so, destination is green
+    cmp pickedUpPassenger, 1
+    je draw_destination_green
+    
+    ; No passenger - draw in blue
+    mov eax, blue + (blue * 16)
+    jmp draw_coin_colored
+
+draw_destination_green:
+    mov eax, green + (black * 16)
+
+draw_coin_colored:
     call SetTextColor
-    mov  dl, xCoinPos
-    mov  dh, yCoinPos
+    mov dl, xCoinPos
+    mov dh, yCoinPos
     call Gotoxy
-    mov  al, "X"
+    mov al, "D"             ; D for destination
     call WriteChar
-    mov  eax, white + (black * 16)   ; FIXED: was "white (black * 16)"
+    mov eax, white + (black * 16)
     call SetTextColor
     ret
 DrawCoin ENDP
@@ -2826,9 +2882,153 @@ CreateRandomCoin ENDP
 
 
 
+; =============================================
+; HandlePickupDrop - spacebar handler for pickup/drop passengers
+; =============================================
+HandlePickupDrop PROC
+    cmp pickedUpPassenger, 1
+    je try_dropoff              ; If carrying, try to drop
+    
+try_pickup:
+    ; Try to pick up a passenger at current position
+    mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
+    mov ecx, 5
+    mov ebx, 0                  ; Passenger index
+    
+check_pickup_loop:
+    ; Check if passenger is waiting (state 0)
+    mov al, [edi]
+    cmp al, 0
+    jne next_pickup_check
+    
+    ; Check if player is at passenger location
+    mov al, xPos[0]
+    cmp al, [esi]
+    jne next_pickup_check
+    
+    mov al, yPos[0]
+    cmp al, [esi+1]
+    jne next_pickup_check
+    
+    ; Player is at passenger - PICKUP!
+    mov [edi], BYTE ptr 1           ; Mark passenger as picked up (state 1)
+    mov currentPassenger, bl        ; Store passenger index
+    mov pickedUpPassenger, 1        ; Flag: carrying passenger
+    
+    ; Erase passenger from screen
+    mov dl, [esi]
+    mov dh, [esi+1]
+    call Gotoxy
+    mov al, ' '
+    call WriteChar
+    
+    ; Generate destination at coin position
+    call CreateRandomCoin
+    
+    ; Redraw screen
+    call DrawCoin
+    ret
+    
+next_pickup_check:
+    add esi, 2
+    inc edi
+    inc ebx
+    loop check_pickup_loop
+    ret
+
+try_dropoff:
+    ; Check if player is at coin position (destination)
+    mov al, xPos[0]
+    cmp al, xCoinPos
+    jne drop_not_at_dest
+    
+    mov al, yPos[0]
+    cmp al, yCoinPos
+    jne drop_not_at_dest
+    
+    ; Player is at destination - DROPOFF!
+    mov al, currentPassenger
+    cmp al, 255
+    je drop_not_at_dest
+    
+    ; Erase destination 'D' from screen
+    mov dl, xCoinPos
+    mov dh, yCoinPos
+    call Gotoxy
+    mov al, ' '
+    call WriteChar
+    
+    ; Mark passenger as delivered (state 2)
+    movzx eax, currentPassenger
+    mov edi, OFFSET passengerStates
+    add edi, eax
+    mov [edi], BYTE ptr 2
+    
+    ; Award points
+    add score, 10
+    
+    ; Update display
+    call DrawScoreboard
+    
+    ; Clear pickup state
+    mov pickedUpPassenger, 0
+    mov currentPassenger, 255
+    
+    ; Check if all passengers are delivered
+    call CheckAllPassengersDelivered
+    cmp al, 1
+    jne drop_not_at_dest
+    
+    ; If all delivered, reset all passengers to waiting state
+    call ResetAllPassengers
+    call DrawPassengers  ; Redraw all waiting passengers
+    
+drop_not_at_dest:
+    ret
+HandlePickupDrop ENDP
 
 ; =============================================
-; EatingCoin - handles when car eats coin
+; CheckAllPassengersDelivered - checks if all passengers are delivered
+; Returns: AL = 1 if all delivered, AL = 0 if not
+; =============================================
+CheckAllPassengersDelivered PROC
+    mov esi, OFFSET passengerStates
+    mov ecx, 5
+    
+check_all_loop:
+    mov al, [esi]
+    cmp al, 2           ; Check if passenger is delivered
+    jne not_all_delivered
+    inc esi
+    loop check_all_loop
+    
+    ; All passengers are delivered
+    mov al, 1
+    ret
+    
+not_all_delivered:
+    mov al, 0
+    ret
+CheckAllPassengersDelivered ENDP
+
+; =============================================
+; ResetAllPassengers - resets all passengers to waiting state
+; =============================================
+ResetAllPassengers PROC
+    mov esi, OFFSET passengerStates
+    mov ecx, 5
+    
+reset_loop:
+    mov [esi], BYTE ptr 0   ; Set state to waiting (0)
+    inc esi
+    loop reset_loop
+    ret
+ResetAllPassengers ENDP
+
+
+; =============================================
+; EatingCoin - handles when car eats coin (now for destinations)
 ; =============================================
 EatingCoin       PROC
     ; car is eating coin - single 'T' car: just increase score and respawn coin
