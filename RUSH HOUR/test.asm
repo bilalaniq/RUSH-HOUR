@@ -206,7 +206,7 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
     ; Current selection
     userChoice       BYTE ?
     fileHandle       HANDLE ?
-    UserColourChoice BYTE ?
+    UserColourChoice BYTE ?    ; 1 = Red, 2 = Yellow, 3 = Random
     PlayerNameLength BYTE ?
     
     ; Missing newGameMsg definition - adding it
@@ -218,6 +218,28 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
                 
     difficultyMsg BYTE "*** DIFFICULTY LEVEL ***",0Dh,0Ah
                   BYTE "Easy, Medium, Hard options...", 0
+
+    ; Game Mode Selection Screen
+    gameModeTitle BYTE "            _____                      ___  ______  _____   ______",  0
+    gameModeLine2 BYTE "           / ____|                    |  \/  |  ____|/ ____| |  ____|", 0
+    gameModeLine3 BYTE "          | |  __  __ _ _ __ ___   ___| |\/| | |__  | (___   | |__  ", 0
+    gameModeLine4 BYTE "          | | |_ |/ _` | '_ ` _ \ / _ \ |  | |  __|  \___ \  |  __| ", 0
+    gameModeLine5 BYTE "          | |__| | (_| | | | | | |  __/ |  | | |____ ____) | | |____", 0
+    gameModeLine6 BYTE "           \_____|\__,_|_| |_| |_|\___|_|  |_|______|_____/  |______|", 0
+
+    gameModePrompt BYTE "Select your game mode:", 0Dh, 0Ah, 0
+    careerModeOpt  BYTE "  1. Career Mode   - Complete progressively difficult levels", 0Dh, 0Ah, 0
+    timeModeOpt    BYTE "  2. Time Mode     - Pick up and deliver passengers within time limits", 0Dh, 0Ah, 0
+    endlessModeOpt BYTE "  3. Endless Mode  - Play until you crash, endless passengers", 0Dh, 0Ah, 0Dh, 0Ah, 0
+    gameModePrompt2 BYTE "Enter your choice (1-3): ", 0
+    gameModeInvalid BYTE "Invalid choice! Please enter 1, 2, or 3.", 0
+    gameModeSelected BYTE "Mode selected: ", 0
+
+    ; Game Mode Storage
+    currentGameMode BYTE 0          ; 1=Career, 2=Time, 3=Endless
+    careerModeName  BYTE "Career Mode", 0
+    timeModeName    BYTE "Time Mode", 0
+    endlessModeName BYTE "Endless Mode", 0
                   
     leaderboardMsg BYTE "***No LEADERBOARD Record Yet***",0Dh,0Ah
                    BYTE "NO Leaderboard record be the first one to register :)", 0
@@ -228,6 +250,21 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
     exitMsg BYTE "*** EXIT GAME ***",0Dh,0Ah
             BYTE "Thank you for playing Rush Hour!",0Dh,0Ah
             BYTE "Goodbye!", 0
+
+    ; Pause Screen
+    pauseScreenTitle BYTE "                           ___  ___    _     _   _  ___  ____",  0
+    pauseLine2       BYTE "                          |  \/  |   / \   | | | |/ _ \|  _ \", 0
+    pauseLine3       BYTE "                          | |\/| |  / _ \  | | | | (_) | |_) |", 0
+    pauseLine4       BYTE "                          | |  | | / ___ \ | |_| |\___/|  __/", 0
+    pauseLine5       BYTE "                          |_|  |_|/_/   \_\ \___/|_____|_|", 0
+    
+    pauseMsg         BYTE "The game is paused.", 0Dh, 0Ah, 0
+    resumeMsg        BYTE "Press any key to resume or 'Q' to quit to menu...", 0
+    quitToMenuMsg    BYTE "Returning to main menu...", 0
+    
+    ; Pause state
+    isPaused         BYTE 0              ; 0 = not paused, 1 = paused
+    pauseSavedScreen BYTE 200 DUP(0)    ; To save screen state during pause
 
 .code
 main PROC
@@ -404,6 +441,7 @@ ProcessMenuChoice PROC
 start_new_game:
     call SelectTaxiScreen
     call EnterPlayer_Name
+    call GameModeSelectionScreen
     ; call start_game
     call Clrscr
     call DrawWall         ;draw walls
@@ -425,8 +463,6 @@ set_red_speed:
 speed_set:
     mov speed, eax
 
-    call InitializeNPC
-    call DrawNPCplayer 
 
     jmp drawCar ;start the game flow (draw car and enter game loop)
     
@@ -706,6 +742,177 @@ invalid_input:
     call Crlf
     jmp  Nameinput_loop
 EnterPlayer_Name  ENDP
+
+; =============================================
+; GameModeSelectionScreen - Displays game mode options
+; =============================================
+GameModeSelectionScreen PROC
+    call Clrscr
+    mov dh, 1
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET gameModeTitle
+    call WriteString
+    mov dh, 2
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET gameModeLine2
+    call WriteString
+    mov dh, 3
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET gameModeLine3
+    call WriteString
+    mov dh, 4
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET gameModeLine4
+    call WriteString
+    mov dh, 5
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET gameModeLine5
+    call WriteString
+    mov dh, 6
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET gameModeLine6
+    call WriteString
+    mov dh, 9
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET gameModePrompt
+    call WriteString
+    mov dh, 11
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET careerModeOpt
+    call WriteString
+    mov dh, 12
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET timeModeOpt
+    call WriteString
+    mov dh, 13
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET endlessModeOpt
+    call WriteString
+gameModeInputLoop:
+    mov dh, 16
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET gameModePrompt2
+    call WriteString
+    call ReadChar
+    call WriteChar
+    call Crlf
+    cmp al, '1'
+    je  setCareerMode
+    cmp al, '2'
+    je  setTimeMode
+    cmp al, '3'
+    je  setEndlessMode
+    mov dh, 18
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET gameModeInvalid
+    call WriteString
+    call Crlf
+    jmp gameModeInputLoop
+setCareerMode:
+    mov currentGameMode, 1
+    mov dh, 18
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET gameModeSelected
+    call WriteString
+    mov edx, OFFSET careerModeName
+    call WriteString
+    call Crlf
+    call ReadChar
+    ret
+setTimeMode:
+    mov currentGameMode, 2
+    mov dh, 18
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET gameModeSelected
+    call WriteString
+    mov edx, OFFSET timeModeName
+    call WriteString
+    call Crlf
+    call ReadChar
+    ret
+setEndlessMode:
+    mov currentGameMode, 3
+    mov dh, 18
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET gameModeSelected
+    call WriteString
+    mov edx, OFFSET endlessModeName
+    call WriteString
+    call Crlf
+    call ReadChar
+    ret
+GameModeSelectionScreen ENDP
+
+; =============================================
+; PauseScreen - Displays pause menu
+; =============================================
+PauseScreen PROC
+    call Clrscr
+    mov dh, 2
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET pauseScreenTitle
+    call WriteString
+    mov dh, 3
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET pauseLine2
+    call WriteString
+    mov dh, 4
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET pauseLine3
+    call WriteString
+    mov dh, 5
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET pauseLine4
+    call WriteString
+    mov dh, 6
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET pauseLine5
+    call WriteString
+    mov dh, 10
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET pauseMsg
+    call WriteString
+    mov dh, 12
+    mov dl, 5
+    call Gotoxy
+    mov edx, OFFSET resumeMsg
+    call WriteString
+    call ReadChar
+    ; Check if user wants to quit
+    cmp al, 'q'
+    je pause_quit_to_menu
+    cmp al, 'Q'
+    je pause_quit_to_menu
+    ; Resume - clear flag and return (game will redraw)
+    mov userChoice, 0
+    ret
+pause_quit_to_menu:
+    ; Set flag to quit to menu
+    mov userChoice, 6
+    ret
+PauseScreen ENDP
+
 
 
 
@@ -1353,7 +1560,43 @@ WaitForKey ENDP
 
 
 
+; =============================================
+; ApplyPenalty - applies penalty based on taxi color
+; =============================================
+ApplyPenalty PROC
+    ; Check if score is already 0
+    cmp score, 0
+    je no_penalty
+    
+    ; Apply penalty based on taxi color
+    cmp UserColourChoice, 1
+    je red_penalty
+    cmp UserColourChoice, 2
+    je yellow_penalty
+    
+    ; Default penalty: -1 point
+    dec score
+    jmp update_display
 
+red_penalty:
+    ; Red taxi: -2 points
+    cmp score, 2
+    jl no_penalty
+    sub score, 2
+    jmp update_display
+
+yellow_penalty:
+    ; Yellow taxi: -4 points
+    cmp score, 4
+    jl no_penalty
+    sub score, 4
+
+update_display:
+    call DrawScoreboard
+
+no_penalty:
+    ret
+ApplyPenalty ENDP
 
 
 
@@ -1410,7 +1653,9 @@ drawCar_loop:
 normal_key:
     ; AL contains a normal ASCII key
     cmp al, 'p'
-    je pause_exit
+    je pause_game
+    cmp al, 'P'
+    je pause_game
     cmp al, ' '             ; Spacebar for pickup/drop
     je handle_spacebar
     jmp gameLoop
@@ -1418,6 +1663,124 @@ normal_key:
 handle_spacebar:
     call HandlePickupDrop
     jmp gameLoop
+
+pause_game:
+    ; Pause menu at top-right corner of screen
+    mov dh, 0
+    mov dl, 27
+    call Gotoxy
+    mov al, 201         ; ╔
+    call WriteChar
+    mov ecx, 50
+    mov al, 205         ; ═
+    clear_top:
+    call WriteChar
+    loop clear_top
+    mov al, 187         ; ╗
+    call WriteChar
+    
+    mov dh, 1
+    mov dl, 27
+    call Gotoxy
+    mov al, 186         ; ║
+    call WriteChar
+    mov al, ' '
+    mov ecx, 50
+    pause_space1:
+    call WriteChar
+    loop pause_space1
+    mov al, 186         ; ║
+    call WriteChar
+    
+    mov dh, 1
+    mov dl, 29
+    call Gotoxy
+    mov edx, OFFSET pauseMsg
+    call WriteString
+    
+    mov dh, 2
+    mov dl, 27
+    call Gotoxy
+    mov al, 186         ; ║
+    call WriteChar
+    mov al, ' '
+    mov ecx, 50
+    pause_space2:
+    call WriteChar
+    loop pause_space2
+    mov al, 186         ; ║
+    call WriteChar
+    
+    mov dh, 2
+    mov dl, 29
+    call Gotoxy
+    mov edx, OFFSET resumeMsg
+    call WriteString
+    
+    mov dh, 3
+    mov dl, 27
+    call Gotoxy
+    mov al, 200         ; ╚
+    call WriteChar
+    mov ecx, 50
+    mov al, 205         ; ═
+    clear_bot:
+    call WriteChar
+    loop clear_bot
+    mov al, 188         ; ╝
+    call WriteChar
+    
+    ; Wait for input
+    call ReadChar
+    
+    ; Check if quit
+    cmp al, 'q'
+    je pause_quit_to_menu
+    cmp al, 'Q'
+    je pause_quit_to_menu
+    
+    ; Clear pause box lines
+    mov dh, 0
+    mov dl, 30
+    call Gotoxy
+    mov ecx, 53
+    mov al, ' '
+    clear_pause_line1:
+    call WriteChar
+    loop clear_pause_line1
+    
+    mov dh, 1
+    mov dl, 30
+    call Gotoxy
+    mov ecx, 53
+    mov al, ' '
+    clear_pause_line2:
+    call WriteChar
+    loop clear_pause_line2
+    
+    mov dh, 2
+    mov dl, 30
+    call Gotoxy
+    mov ecx, 53
+    mov al, ' '
+    clear_pause_line3:
+    call WriteChar
+    loop clear_pause_line3
+    
+    mov dh, 3
+    mov dl, 30
+    call Gotoxy
+    mov ecx, 53
+    mov al, ' '
+    clear_pause_line4:
+    call WriteChar
+    loop clear_pause_line4
+    
+    ; Resume - continue game
+    jmp gameLoop
+    
+pause_quit_to_menu:
+    ret
 
 pause_exit:
     ; process 'p' (or other future normal keys) via storing and FlushKeys
@@ -1431,32 +1794,129 @@ checkBottom:
     inc al             ; Calculate: current Y + 1 (moving down)
     mov cl, yPosWall[3]; Get bottom wall position (27)
     cmp al, cl         ; Compare next position with wall
-    jb  moveDown       ; If next Y < 27 → safe to move down
-    je  died           ; If next Y = 27 → hit wall, game over
+    jae noMoveDown     ; If next Y >= 27 → hit wall, stop
+    
+    ; Check collision with building, box, or tree
+    mov dl, xPos[0]    ; Next X position
+    mov dh, al         ; Next Y position
+    call IsBuilding
+    cmp al, 1
+    je noMoveDown      ; Hit building, don't move
+    mov dl, xPos[0]
+    mov dh, [yPos]
+    inc dh             ; Next Y position
+    call IsBox
+    cmp al, 1
+    je noMoveDown      ; Hit box, don't move
+    mov dl, xPos[0]
+    mov dh, [yPos]
+    inc dh             ; Next Y position
+    call IsTree
+    cmp al, 1
+    je noMoveDown      ; Hit tree, don't move
+    
+    jmp moveDown       ; All checks passed, safe to move down
+    
+noMoveDown:
+    call ApplyPenalty
+    jmp gameLoop
 
 checkLeft: 	
     mov al, xPos[0]    ; Get current X position
     dec al             ; Calculate: current X - 1 (moving left)
     mov cl, xPosWall[0]; Get left wall position (10)
     cmp al, cl         ; Compare next position with wall
-    ja  moveLeft       ; If next X > 10 → safe to move left
-    je  died           ; If next X = 10 → hit wall, game over
+    jle noMoveLeft     ; If next X <= 10 → hit wall, stop
+    
+    ; Check collision with building, box, or tree
+    mov dl, al         ; Next X position
+    mov dh, yPos[0]    ; Current Y position
+    call IsBuilding
+    cmp al, 1
+    je noMoveLeft      ; Hit building, don't move
+    mov dl, [xPos]
+    dec dl             ; Next X position
+    mov dh, yPos[0]
+    call IsBox
+    cmp al, 1
+    je noMoveLeft      ; Hit box, don't move
+    mov dl, [xPos]
+    dec dl             ; Next X position
+    mov dh, yPos[0]
+    call IsTree
+    cmp al, 1
+    je noMoveLeft      ; Hit tree, don't move
+    
+    jmp moveLeft       ; All checks passed, safe to move left
+    
+noMoveLeft:
+    call ApplyPenalty
+    jmp gameLoop
+
 
 checkRight: 	
     mov al, xPos[0]    ; Get current X position
     inc al             ; Calculate: current X + 1 (moving right)
     mov cl, xPosWall[2]; Get right wall position (110)
     cmp al, cl         ; Compare next position with wall
-    jb  moveRight      ; If next X < 110 → safe to move right
-    je  died           ; If next X = 110 → hit wall, game over
+    jae noMoveRight    ; If next X >= 110 → hit wall, stop
+    
+    ; Check collision with building, box, or tree
+    mov dl, al         ; Next X position
+    mov dh, yPos[0]    ; Current Y position
+    call IsBuilding
+    cmp al, 1
+    je noMoveRight     ; Hit building, don't move
+    mov dl, [xPos]
+    inc dl             ; Next X position
+    mov dh, yPos[0]
+    call IsBox
+    cmp al, 1
+    je noMoveRight     ; Hit box, don't move
+    mov dl, [xPos]
+    inc dl             ; Next X position
+    mov dh, yPos[0]
+    call IsTree
+    cmp al, 1
+    je noMoveRight     ; Hit tree, don't move
+    
+    jmp moveRight      ; All checks passed, safe to move right
+    
+noMoveRight:
+    call ApplyPenalty
+    jmp gameLoop
 
 checkTop: 	
     mov al, yPos[0]    ; Get current Y position
     dec al             ; Calculate: current Y - 1 (moving up)
     mov cl, yPosWall[0]; Get top wall position (5)
     cmp al, cl         ; Compare next position with wall
-    ja  moveUp         ; If next Y > 5 → safe to move up
-    je  died           ; If next Y = 5 → hit wall, game over
+    jle noMoveUp       ; If next Y <= 5 → hit wall, stop
+    
+    ; Check collision with building, box, or tree
+    mov dl, xPos[0]    ; Current X position
+    mov dh, al         ; Next Y position
+    call IsBuilding
+    cmp al, 1
+    je noMoveUp        ; Hit building, don't move
+    mov dl, xPos[0]
+    mov dh, [yPos]
+    dec dh             ; Next Y position
+    call IsBox
+    cmp al, 1
+    je noMoveUp        ; Hit box, don't move
+    mov dl, xPos[0]
+    mov dh, [yPos]
+    dec dh             ; Next Y position
+    call IsTree
+    cmp al, 1
+    je noMoveUp        ; Hit tree, don't move
+    
+    jmp moveUp         ; All checks passed, safe to move up
+    
+noMoveUp:
+    call ApplyPenalty
+    jmp gameLoop
 		
 		moveUp:		
 		mov  eax, speed     
@@ -1792,11 +2252,7 @@ DrawBuildings ENDP
 
 
 
-; =============================================
-; IsBuilding - checks if a position contains a building
-; Input: DL = X position, DH = Y position
-; Returns: AL = 1 if building, AL = 0 if not building
-; =============================================
+
 ; =============================================
 ; IsBuilding - checks if a position contains ANY PART of a building
 ; Input: DL = X position, DH = Y position
@@ -1863,41 +2319,6 @@ noBuilding:
     mov al, 0
     ret
 IsBuilding ENDP
-
-
-
-
-; ; Example 1: Check if player position hits a building
-; mov dl, playerX
-; mov dh, playerY
-; call IsBuilding
-; cmp al, 1
-; je handleBuildingCollision
-
-; ; Example 2: Check if bullet hits a building  
-; mov dl, bulletX
-; mov dh, bulletY
-; call IsBuilding
-; cmp al, 1
-; je destroyBullet
-
-; ; Example 3: Check if position is clear before spawning
-; mov dl, spawnX
-; mov dh, spawnY
-; call IsBuilding
-; cmp al, 0
-; je spawnObject  ; Only spawn if no building
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -2016,32 +2437,6 @@ done_drawing:
     call SetTextColor
     ret
 DrawBoxesAndTrees ENDP
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -2282,21 +2677,6 @@ DrawPassengers ENDP
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ; =============================================
 ; IsBox - checks if a position contains a box
 ; Input: DL = X position, DH = Y position
@@ -2411,269 +2791,6 @@ IsTree ENDP
 
 
 
-; =============================================
-; InitializeNPC - sets up initial NPC position
-; =============================================
-InitializeNPC PROC
-    call GenerateValidNPCPosition
-    mov npcX, al
-    mov npcY, ah
-    call SetNPCTarget  ; Set initial target
-    ret
-InitializeNPC ENDP
-
-; =============================================
-; GenerateValidNPCPosition - finds valid spawn position
-; Returns: AL = X, AH = Y
-; =============================================
-GenerateValidNPCPosition PROC
-    LOCAL attempts:BYTE
-    mov attempts, 0
-    
-generate_again:
-    inc attempts
-    cmp attempts, 50
-    jg use_default
-    
-    ; Generate X between 11 and 109 (inside walls)
-    mov eax, 99      ; 109-11+1 = 99 possible positions
-    call RandomRange
-    add al, 11       ; 11 + (0-98) = 11-109
-    mov bl, al       ; Save X in BL
-    
-    ; Generate Y between 6 and 26 (inside walls)
-    mov eax, 21      ; 26-6+1 = 21 possible positions
-    call RandomRange
-    add al, 6        ; 6 + (0-20) = 6-26
-    mov bh, al       ; Save Y in BH
-    
-    ; Check if position overlaps with player
-    mov dl, bl
-    mov dh, bh
-    cmp dl, xPos[0]     ; Compare with player X
-    jne position_ok
-    cmp dh, yPos[0]     ; Compare with player Y
-    je generate_again   ; If same position, regenerate
-    
-position_ok:
-    ; Check if position is in building
-    call IsBuilding
-    cmp al, 1
-    je generate_again   ; If in building, regenerate
-    
-    ; Position is valid
-    mov al, bl
-    mov ah, bh
-    ret
-    
-use_default:
-    mov al, 60      ; Default X
-    mov ah, 15      ; Default Y
-    ret
-GenerateValidNPCPosition ENDP
-
-; =============================================
-; SetNPCTarget - sets new random target for NPC
-; =============================================
-SetNPCTarget PROC
-    LOCAL attempts:BYTE
-    mov attempts, 0
-    
-target_again:
-    inc attempts
-    cmp attempts, 50
-    jg default_target
-    
-    ; Generate target X between 11 and 109
-    mov eax, 99
-    call RandomRange
-    add al, 11
-    mov bl, al
-    
-    ; Generate target Y between 6 and 26  
-    mov eax, 21
-    call RandomRange
-    add al, 6
-    mov bh, al
-    
-    ; Don't allow target too close to current position
-    mov al, npcX
-    sub al, bl
-    jns check_x_diff
-    neg al
-check_x_diff:
-    cmp al, 5        ; Minimum 5 units X difference
-    jb target_again
-    
-    mov al, npcY
-    sub al, bh
-    jns check_y_diff
-    neg al
-check_y_diff:
-    cmp al, 3        ; Minimum 3 units Y difference
-    jb target_again
-    
-    ; Check if target position is valid (not in building)
-    mov dl, bl
-    mov dh, bh
-    call IsBuilding
-    cmp al, 1
-    je target_again
-    
-    ; Target is valid
-    mov npcTargetX, bl
-    mov npcTargetY, bh
-    ret
-    
-default_target:
-    ; Set default target opposite side
-    mov al, npcX
-    cmp al, 60
-    jl set_right_target
-    
-set_left_target:
-    mov npcTargetX, 20
-    mov npcTargetY, 15
-    ret
-    
-set_right_target:
-    mov npcTargetX, 100
-    mov npcTargetY, 15
-    ret
-SetNPCTarget ENDP
-
-; =============================================
-; UpdateNPC - moves NPC toward target
-; =============================================
-UpdateNPC PROC
-    ; Erase current NPC position
-    mov dl, npcX
-    mov dh, npcY
-    call Gotoxy
-    mov al, ' '
-    call WriteChar
-
-    ; Alternate movement axis each tick using npcMoves (prevents diagonal jitter)
-    inc byte ptr npcMoves
-    mov al, npcMoves
-    and al, 1
-    cmp al, 0
-    je move_x_axis
-
-    ; --- Move Y axis only this tick ---
-move_y_axis:
-    mov al, npcY
-    cmp al, npcTargetY
-    je after_move
-    jl do_move_down
-    dec npcY
-    jmp after_move
-
-do_move_down:
-    inc npcY
-    jmp after_move
-
-    ; --- Move X axis only this tick ---
-move_x_axis:
-    mov al, npcX
-    cmp al, npcTargetX
-    je after_move
-    jl do_move_right
-    dec npcX
-    jmp after_move
-
-do_move_right:
-    inc npcX
-
-after_move:
-    ; Keep NPC inside walls
-    call CheckNPCWallCollision
-
-    ; If reached both X and Y, pick a new target
-    mov al, npcX
-    cmp al, npcTargetX
-    jne draw_and_ret
-    mov al, npcY
-    cmp al, npcTargetY
-    jne draw_and_ret
-    call SetNPCTarget
-
-draw_and_ret:
-    call DrawNPCplayer
-    ret
-UpdateNPC ENDP
-
-; =============================================
-; CheckNPCWallCollision - keeps NPC within walls
-; =============================================
-CheckNPCWallCollision PROC
-    ; Check left wall (X = 10)
-    mov al, npcX
-    cmp al, 11
-    jg check_right_wall
-    mov npcX, 11
-    jmp check_y_walls
-    
-check_right_wall:
-    cmp al, 109
-    jl check_y_walls
-    mov npcX, 109
-    
-check_y_walls:
-    ; Check top wall (Y = 5)
-    mov al, npcY
-    cmp al, 6
-    jg check_bottom_wall
-    mov npcY, 6
-    ret
-    
-check_bottom_wall:
-    cmp al, 26
-    jl walls_ok
-    mov npcY, 26
-    
-walls_ok:
-    ret
-CheckNPCWallCollision ENDP
-
-; =============================================
-; DrawNPCplayer - draws the NPC car
-; =============================================
-DrawNPCplayer PROC
-    mov eax, npcColor
-    call SetTextColor
-    
-    mov dl, npcX
-    mov dh, npcY
-    call Gotoxy
-    mov al, npcChar
-    call WriteChar
-    
-    mov eax, white + (black * 16)
-    call SetTextColor
-    ret 
-DrawNPCplayer ENDP
-
-; =============================================
-; CheckPlayerNPCCollision - checks if player hits NPC
-; Returns: AL = 1 if collision, AL = 0 if not
-; =============================================
-CheckPlayerNPCCollision PROC
-    mov al, xPos[0]
-    cmp al, npcX
-    jne no_collision
-    mov al, yPos[0]
-    cmp al, npcY
-    jne no_collision
-    
-    ; Collision detected
-    mov al, 1
-    ret
-    
-no_collision:
-    mov al, 0
-    ret
-CheckPlayerNPCCollision ENDP
 
 
 
@@ -2744,14 +2861,27 @@ CheckPlayerNPCCollision ENDP
 ; =============================================
 ; DrawScoreboard - draws the scoreboard
 ; =============================================
-DrawScoreboard PROC ;procedure to draw scoreboard
+DrawScoreboard PROC
 	mov  dl,  2
 	mov  dh,  1
 	call Gotoxy
-	mov  edx, OFFSET strScore ;print string that indicates score
+	mov  edx, OFFSET strScore
 	call WriteString
-	mov  eax, "0"
-	call WriteChar            ;scoreboard starts with 0
+	
+	; Clear old score area (3 spaces for any previous value)
+	mov al, ' '
+	call WriteChar
+	call WriteChar
+	call WriteChar
+	
+	; Reposition cursor to display score
+	mov  dl,  17
+	mov  dh,  1
+	call Gotoxy
+	
+	; Display score value
+	movzx eax, score        ; Load current score (0-255)
+	call WriteInt           ; Display as integer
 	ret
 DrawScoreboard ENDP
 
@@ -2773,10 +2903,6 @@ DrawPlayer     PROC ; draw player (taxi) at (xPos,yPos) in yellow
     call SetTextColor
     ret
 DrawPlayer   ENDP
-
-
-
-
 
 
 
@@ -3032,7 +3158,7 @@ ResetAllPassengers ENDP
 ; =============================================
 EatingCoin       PROC
     ; car is eating coin - single 'T' car: just increase score and respawn coin
-    inc  score
+    add score, 10
     call CreateRandomCoin
     
     call DrawCoin
@@ -3103,6 +3229,99 @@ YouDied          ENDP
 ; =============================================
 ; ReinitializeGame - resets game state for a new game
 ; =============================================
+; =============================================
+; SCORING SYSTEM - COMPLETE REBUILD
+; Uses UserColourChoice: 1=Red Taxi, 2=Yellow Taxi
+; =============================================
+
+; AddPoints - Award positive points for deliveries/bonuses
+; Input: AL = points to add
+; Ensures score doesn't exceed 255
+AddPoints PROC
+    movzx ecx, score        ; Load current score into ECX
+    add ecx, eax            ; Add points
+    cmp ecx, 255            ; Check if exceeds max
+    jle add_ok
+    mov score, 255          ; Cap at 255
+    jmp add_done
+add_ok:
+    mov score, cl           ; Store new score
+add_done:
+    call DrawScoreboard
+    ret
+AddPoints ENDP
+
+; SubtractPoints - Deduct negative points for collisions
+; Input: AL = points to subtract
+; Ensures score doesn't go below 0
+SubtractPoints PROC
+    movzx ecx, score        ; Load current score
+    cmp ecx, eax            ; Compare score with penalty
+    jl sub_to_zero          ; If score < penalty, set to 0
+    sub ecx, eax            ; Otherwise subtract
+    mov score, cl           ; Store result
+    jmp sub_done
+sub_to_zero:
+    mov score, 0            ; Set to 0
+sub_done:
+    call DrawScoreboard
+    ret
+SubtractPoints ENDP
+
+; AwardPassengerDelivery - Award +10 points for passenger delivery
+AwardPassengerDelivery PROC
+    mov al, 10
+    call AddPoints
+    ret
+AwardPassengerDelivery ENDP
+
+; PenaltyHitObstacle - Red/Yellow taxi hits obstacle (tree/box/building)
+; Checks UserColourChoice: 1=Red (-2), 2=Yellow (-4)
+PenaltyHitObstacle PROC
+    cmp UserColourChoice, 1
+    je penalty_red_obstacle
+    ; Default to yellow
+    mov al, 4               ; Yellow taxi: -4 points
+    jmp apply_obstacle_penalty
+penalty_red_obstacle:
+    mov al, 2               ; Red taxi: -2 points
+apply_obstacle_penalty:
+    call SubtractPoints
+    ret
+PenaltyHitObstacle ENDP
+
+; PenaltyHitCar - Red/Yellow taxi hits another car
+; Checks UserColourChoice: 1=Red (-3), 2=Yellow (-2)
+PenaltyHitCar PROC
+    cmp UserColourChoice, 1
+    je penalty_red_car
+    ; Default to yellow
+    mov al, 2               ; Yellow taxi: -2 points
+    jmp apply_car_penalty
+penalty_red_car:
+    mov al, 3               ; Red taxi: -3 points
+apply_car_penalty:
+    call SubtractPoints
+    ret
+PenaltyHitCar ENDP
+
+; PenaltyHitPerson - Any taxi hits pedestrian: -5 points
+PenaltyHitPerson PROC
+    mov al, 5
+    call SubtractPoints
+    ret
+PenaltyHitPerson ENDP
+
+; PenaltyWallCollision - Any taxi hits wall: -1 point
+PenaltyWallCollision PROC
+    cmp score, 0
+    je no_wall_penalty      ; Don't go below 0
+    mov al, 1
+    call SubtractPoints
+no_wall_penalty:
+    ret
+PenaltyWallCollision ENDP
+
 ReinitializeGame PROC 
     mov  xPos[0],   11
     mov  yPos[0],   6
