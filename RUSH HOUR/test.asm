@@ -248,12 +248,12 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
                   BYTE "Easy, Medium, Hard options...", 0
 
     ; Game Mode Selection Screen
-    gameModeTitle BYTE "            _____                      ___  ______  _____   ______",  0
-    gameModeLine2 BYTE "           / ____|                    |  \/  |  ____|/ ____| |  ____|", 0
-    gameModeLine3 BYTE "          | |  __  __ _ _ __ ___   ___| |\/| | |__  | (___   | |__  ", 0
-    gameModeLine4 BYTE "          | | |_ |/ _` | '_ ` _ \ / _ \ |  | |  __|  \___ \  |  __| ", 0
-    gameModeLine5 BYTE "          | |__| | (_| | | | | | |  __/ |  | | |____ ____) | | |____", 0
-    gameModeLine6 BYTE "           \_____|\__,_|_| |_| |_|\___|_|  |_|______|_____/  |______|", 0
+    gameModeTitle BYTE "            ____                      __  __           _     ",  0
+    gameModeLine2 BYTE "           / ___| __ _ _ __ ___   ___|  \/  | ___   __| | ___", 0
+    gameModeLine3 BYTE "          | |  _ / _` | '_ ` _ \ / _ \ |\/| |/ _ \ / _` |/ _ \", 0
+    gameModeLine4 BYTE "          | |_| | (_| | | | | | |  __/ |  | | (_) | (_| |  __/", 0
+    gameModeLine5 BYTE "           \____|\__,_|_| |_| |_|\___|_|  |_|\___/ \__,_|\___|", 0
+
 
     gameModePrompt BYTE "Select your game mode:", 0Dh, 0Ah, 0
     careerModeOpt  BYTE "  1. Career Mode   - Complete progressively difficult levels", 0Dh, 0Ah, 0
@@ -268,6 +268,13 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
     careerModeName  BYTE "Career Mode", 0
     timeModeName    BYTE "Time Mode", 0
     endlessModeName BYTE "Endless Mode", 0
+    
+    ; Time Mode Variables
+    timeCounter     BYTE 60         ; Countdown timer (60 seconds)
+    timeFrameCounter BYTE 0         ; Frame counter for timer updates
+    strTimeLeft     BYTE "Time: ", 0
+    endlessComingSoon BYTE "Coming Soon!", 0
+    strTimeUp       BYTE "Time's Up! You died!", 0
                   
     leaderboardMsg BYTE "***No LEADERBOARD Record Yet***",0Dh,0Ah
                    BYTE "NO Leaderboard record be the first one to register :)", 0
@@ -279,12 +286,7 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
             BYTE "Thank you for playing Rush Hour!",0Dh,0Ah
             BYTE "Goodbye!", 0
 
-    ; Pause Screen
-    pauseScreenTitle BYTE "                           ___  ___    _     _   _  ___  ____",  0
-    pauseLine2       BYTE "                          |  \/  |   / \   | | | |/ _ \|  _ \", 0
-    pauseLine3       BYTE "                          | |\/| |  / _ \  | | | | (_) | |_) |", 0
-    pauseLine4       BYTE "                          | |  | | / ___ \ | |_| |\___/|  __/", 0
-    pauseLine5       BYTE "                          |_|  |_|/_/   \_\ \___/|_____|_|", 0
+
     
     pauseMsg         BYTE "The game is paused.", 0Dh, 0Ah, 0
     resumeMsg        BYTE "Press any key to resume or 'Q' to quit to menu...", 0
@@ -802,11 +804,8 @@ GameModeSelectionScreen PROC
     call Gotoxy
     mov edx, OFFSET gameModeLine5
     call WriteString
-    mov dh, 6
-    mov dl, 10
-    call Gotoxy
-    mov edx, OFFSET gameModeLine6
-    call WriteString
+    
+    
     mov dh, 9
     mov dl, 5
     call Gotoxy
@@ -887,60 +886,7 @@ setEndlessMode:
     ret
 GameModeSelectionScreen ENDP
 
-; =============================================
-; PauseScreen - Displays pause menu
-; =============================================
-PauseScreen PROC
-    call Clrscr
-    mov dh, 2
-    mov dl, 10
-    call Gotoxy
-    mov edx, OFFSET pauseScreenTitle
-    call WriteString
-    mov dh, 3
-    mov dl, 10
-    call Gotoxy
-    mov edx, OFFSET pauseLine2
-    call WriteString
-    mov dh, 4
-    mov dl, 10
-    call Gotoxy
-    mov edx, OFFSET pauseLine3
-    call WriteString
-    mov dh, 5
-    mov dl, 10
-    call Gotoxy
-    mov edx, OFFSET pauseLine4
-    call WriteString
-    mov dh, 6
-    mov dl, 10
-    call Gotoxy
-    mov edx, OFFSET pauseLine5
-    call WriteString
-    mov dh, 10
-    mov dl, 5
-    call Gotoxy
-    mov edx, OFFSET pauseMsg
-    call WriteString
-    mov dh, 12
-    mov dl, 5
-    call Gotoxy
-    mov edx, OFFSET resumeMsg
-    call WriteString
-    call ReadChar
-    ; Check if user wants to quit
-    cmp al, 'q'
-    je pause_quit_to_menu
-    cmp al, 'Q'
-    je pause_quit_to_menu
-    ; Resume - clear flag and return (game will redraw)
-    mov userChoice, 0
-    ret
-pause_quit_to_menu:
-    ; Set flag to quit to menu
-    mov userChoice, 6
-    ret
-PauseScreen ENDP
+
 
 
 
@@ -1630,10 +1576,16 @@ ApplyPenalty ENDP
 
 
 
+
+
 ; =============================================
 ; drawCar - Main Game Loop
 ; ============================================
 drawCar:
+    ; Clear and regenerate boxes and trees each game
+    mov boxCount, 0
+    mov treeCount, 0
+    
     mov esi, 0
     mov ecx, 1 ; draw only the head (car)
 drawCar_loop:
@@ -1769,38 +1721,38 @@ pause_game:
     cmp al, 'Q'
     je pause_quit_to_menu
     
-    ; Clear pause box lines
+    ; Clear pause box lines - clear entire row from column 27-80
     mov dh, 0
-    mov dl, 30
+    mov dl, 27
     call Gotoxy
-    mov ecx, 53
+    mov ecx, 54          ; 27 to 80 = 54 chars (80-27+1)
     mov al, ' '
     clear_pause_line1:
     call WriteChar
     loop clear_pause_line1
     
     mov dh, 1
-    mov dl, 30
+    mov dl, 27
     call Gotoxy
-    mov ecx, 53
+    mov ecx, 54
     mov al, ' '
     clear_pause_line2:
     call WriteChar
     loop clear_pause_line2
     
     mov dh, 2
-    mov dl, 30
+    mov dl, 27
     call Gotoxy
-    mov ecx, 53
+    mov ecx, 54
     mov al, ' '
     clear_pause_line3:
     call WriteChar
     loop clear_pause_line3
     
     mov dh, 3
-    mov dl, 30
+    mov dl, 27
     call Gotoxy
-    mov ecx, 53
+    mov ecx, 54
     mov al, ' '
     clear_pause_line4:
     call WriteChar
@@ -2637,17 +2589,17 @@ GenerateForcedPosition PROC
     movzx ecx, passengerCount
     cmp ecx, 0
     jne passenger_1
-    ; Position 0: top-left area (X=20, Y=8)
-    mov bl, 100
-    mov bh, 8
+    ; Position 0: top-left area (X=25, Y=10)
+    mov bl, 25
+    mov bh, 10
     ret
     
 passenger_1:
     cmp ecx, 1
     jne passenger_2
-    ; Position 1: top-right area (X=100, Y=8)
-    mov bl, 100
-    mov bh, 8
+    ; Position 1: top-right area (X=95, Y=10)
+    mov bl, 95
+    mov bh, 10
     ret
     
 passenger_2:
@@ -2661,15 +2613,15 @@ passenger_2:
 passenger_3:
     cmp ecx, 3
     jne passenger_4
-    ; Position 3: bottom-left area (X=20, Y=24)
-    mov bl, 20
-    mov bh, 24
+    ; Position 3: bottom-left area (X=25, Y=22)
+    mov bl, 25
+    mov bh, 22
     ret
     
 passenger_4:
-    ; Position 4: bottom-right area (X=100, Y=24)
-    mov bl, 100
-    mov bh, 24
+    ; Position 4: bottom-right area (X=95, Y=22)
+    mov bl, 95
+    mov bh, 22
     ret
 GenerateForcedPosition ENDP
 
@@ -3751,7 +3703,7 @@ DrawDestination ENDP
 ; BLUE color with "*" symbol
 ; =============================================
 DrawBonusPoint PROC
-    mov eax, blue + (black * 16)
+    mov eax, blue + (blue * 16)
     call SetTextColor
     mov dl, xCoinPos
     mov dh, yCoinPos
@@ -4158,14 +4110,93 @@ no_wall_penalty:
 PenaltyWallCollision ENDP
 
 ReinitializeGame PROC 
+    ; ===== Player State =====
     mov  xPos[0],   11
     mov  yPos[0],   6
-    mov  score,     0   
-    mov  inputChar, "+" 
     
-    ; Reset box and tree counts
+    ; ===== Game Variables =====
+    mov  score,     0
+    mov  inputChar, "+"
+    mov  speed,     0
+    
+    ; ===== Passenger System =====
+    call ResetAllPassengers     ; Reset all passenger states to waiting
+    mov currentPassenger, 255   ; No passenger being carried
+    mov pickedUpPassenger, 0    ; Not carrying anyone
+    mov passengerCount, 0       ; No passengers counted yet
+    
+    ; ===== Coin/Bonus Position =====
+    mov xCoinPos, 0
+    mov yCoinPos, 0
+    
+    ; ===== Buildings & Obstacles =====
     mov boxCount, 0
     mov treeCount, 0
+    mov buildingCountPlaced, 0
+    
+    ; Clear box positions array
+    mov esi, OFFSET boxPositions
+    mov ecx, 14
+    xor al, al
+clear_boxes:
+    mov [esi], al
+    inc esi
+    loop clear_boxes
+    
+    ; Clear tree positions array
+    mov esi, OFFSET treePositions
+    mov ecx, 14
+    xor al, al
+clear_trees:
+    mov [esi], al
+    inc esi
+    loop clear_trees
+    
+    ; Clear building positions array
+    mov esi, OFFSET buildingPositions
+    mov ecx, 200
+    xor al, al
+clear_buildings:
+    mov [esi], al
+    inc esi
+    loop clear_buildings
+    
+    ; ===== NPC Car 1 - Reset to start position and state =====
+    mov npc1X, 30
+    mov npc1Y, 10
+    mov npc1StartX, 30
+    mov npc1StartY, 10
+    mov npc1Direction, 1
+    mov npc1StepCount, 0
+    mov npc1MoveCounter, 0
+    mov npc1MoveMode, 1
+    
+    ; ===== NPC Car 2 - Reset to start position and state =====
+    mov npc2X, 60
+    mov npc2Y, 12
+    mov npc2StartX, 60
+    mov npc2StartY, 12
+    mov npc2Direction, 1
+    mov npc2StepCount, 0
+    mov npc2MoveCounter, 0
+    mov npc2MoveMode, 2
+    
+    ; ===== NPC Car 3 - Reset to start position and state =====
+    mov npc3X, 90
+    mov npc3Y, 18
+    mov npc3StartX, 90
+    mov npc3StartY, 18
+    mov npc3Direction, 1
+    mov npc3StepCount, 0
+    mov npc3MoveCounter, 0
+    mov npc3MoveMode, 1
+    
+    ; ===== Time Mode Variables =====
+    mov timeCounter, 60
+    mov timeFrameCounter, 0
+    
+    ; ===== Pause State =====
+    mov isPaused, 0
     
     Call ClrScr
     jmp  main           
