@@ -28,23 +28,49 @@ boxChar BYTE 'B'    ; Simple character for box
 treeChar BYTE 157  ; Simple character for tree
 
 
+
+
   ; =============================================
-; NPC Data
+; NPC Data - 3 NPC Cars with fixed movement patterns (15 steps back and forth)
 ; =============================================
-npcX          BYTE ?        ; NPC current X position
-npcY          BYTE ?        ; NPC current Y position  
-npcTargetX    BYTE ?        ; NPC target X position
-npcTargetY    BYTE ?        ; NPC target Y position
-npcMoves      BYTE 0        ; Counter for NPC movement
-npcChar       BYTE 'C'      ; NPC character
-npcColor      DWORD cyan + (black * 16)  ; NPC color
+; NPC Car 1 - Horizontal movement (left-right)
+npc1X          BYTE 30        ; NPC1 current X position
+npc1Y          BYTE 10        ; NPC1 current Y position  
+npc1StartX     BYTE 30        ; NPC1 starting X (reference point)
+npc1StartY     BYTE 10        ; NPC1 starting Y (reference point)
+npc1Direction  BYTE 1         ; NPC1 direction: 1=moving away, 0=moving back
+npc1StepCount  BYTE 0         ; NPC1 step counter (0-15)
+npc1MoveMode   BYTE 1         ; NPC1 move mode: 1=horizontal, 2=vertical
+npc1MoveCounter BYTE 0        ; NPC1 speed counter (moves every 4 cycles)
+
+; NPC Car 2 - Vertical movement (up-down)
+npc2X          BYTE 60        ; NPC2 current X position
+npc2Y          BYTE 12        ; NPC2 current Y position  
+npc2StartX     BYTE 60        ; NPC2 starting X (reference point)
+npc2StartY     BYTE 12        ; NPC2 starting Y (reference point)
+npc2Direction  BYTE 1         ; NPC2 direction: 1=moving away, 0=moving back
+npc2StepCount  BYTE 0         ; NPC2 step counter (0-15)
+npc2MoveMode   BYTE 2         ; NPC2 move mode: 1=horizontal, 2=vertical
+npc2MoveCounter BYTE 0        ; NPC2 speed counter (moves every 5 cycles)
+
+; NPC Car 3 - Horizontal movement (right-left)
+npc3X          BYTE 90        ; NPC3 current X position
+npc3Y          BYTE 18        ; NPC3 current Y position  
+npc3StartX     BYTE 90        ; NPC3 starting X (reference point)
+npc3StartY     BYTE 18        ; NPC3 starting Y (reference point)
+npc3Direction  BYTE 1         ; NPC3 direction: 1=moving away, 0=moving back
+npc3StepCount  BYTE 0         ; NPC3 step counter (0-15)
+npc3MoveMode   BYTE 1         ; NPC3 move mode: 1=horizontal, 2=vertical
+npc3MoveCounter BYTE 0        ; NPC3 speed counter (moves every 4 cycles)
+
+npcChar        BYTE 'C'       ; NPC character
+
 
 
 
 ; Building position storage - tracks all placed buildings
 buildingPositions BYTE 200 DUP(0)  ; Stores X,Y pairs for each building block
 buildingCountPlaced BYTE 0         ; Number of buildings actually placed
-
 
 
 
@@ -447,6 +473,7 @@ start_new_game:
     call DrawWall         ;draw walls
     call DrawScoreboard   ;draw scoreboard
     call DrawBuildings
+    call DrawNPCs         ;draw NPC cars
 
     ; Set speed based on taxi color
     ; 1 = Red Taxi (slow: 15ms), 2 = Yellow Taxi (fast: 5ms)
@@ -1625,11 +1652,13 @@ drawCar_loop:
     mov  dh, 1
     call Gotoxy
 
-    ; Add these two lines:
-    ; call UpdateNPC
-    ; call CheckPlayerNPCCollision
-    ; cmp al, 1
-    ; je died          ; Player dies if hits NPC
+    ; Erase and move NPC cars
+    call EraseNPCs
+    call MoveNPCs
+    call DrawNPCs
+    
+    ; Check if player collided with any NPC
+    ; TODO: Implement NPC collision detection here
 
     ; get user key input
     call ReadKey  ; No Key Pressed → ZF = 1 (Zero Flag SET) on Key Pressed call ReadKey → ZF = 0 (Zero Flag CLEAR)
@@ -1977,6 +2006,13 @@ noMoveUp:
     cmp al, 1
     je died
     
+    ; Check NPC collision
+    mov dl, xPos[0]
+    mov dh, yPos[0]
+    call CheckPlayerNPCCollision
+    cmp al, 1
+    je npc_collision
+    
     mov  al, xPos[0]
     cmp  al, xCoinPos
     jne  no_eat
@@ -1988,8 +2024,10 @@ noMoveUp:
 
     no_eat:
         jmp gameLoop
-
-
+        
+    npc_collision:
+        call PenaltyHitCar
+        jmp gameLoop
 
 	died:
 	call YouDied
@@ -2751,6 +2789,159 @@ noTree:
     ret
 IsTree ENDP
 
+; =============================================
+; IsPassenger - Check if waiting passenger at position (DL, DH)
+; Input: DL = X position, DH = Y position
+; Output: AL = 1 if passenger found, AL = 0 if not
+; =============================================
+IsPassenger PROC
+    ; Check if any passengers exist
+    mov al, passengerCount
+    cmp al, 0
+    je noPassenger
+    
+    ; Check each passenger
+    mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
+    movzx ecx, passengerCount
+    
+checkPassengerLoop:
+    ; Only check waiting passengers (state 0)
+    mov al, [edi]
+    cmp al, 0
+    jne nextPassenger
+    
+    mov al, [esi]       ; Passenger X
+    mov ah, [esi+1]     ; Passenger Y
+    
+    cmp dl, al          ; Compare X position
+    jne nextPassenger
+    cmp dh, ah          ; Compare Y position
+    jne nextPassenger
+    
+    ; Position matches passenger
+    mov al, 1
+    ret
+    
+nextPassenger:
+    add esi, 2
+    inc edi
+    loop checkPassengerLoop
+    
+noPassenger:
+    mov al, 0
+    ret
+IsPassenger ENDP
+
+; =============================================
+; CheckPlayerNPCCollision - Check if player collides with any NPC
+; Input: DL = player X, DH = player Y
+; Output: AL = 1 if collision with NPC, AL = 0 if no collision
+; =============================================
+CheckPlayerNPCCollision PROC
+    ; Check NPC1 - exact position and adjacent positions
+    mov al, dl
+    cmp al, npc1X
+    je check_npc1_y
+    
+    ; Check if player is adjacent to NPC1 (±1 tile)
+    mov al, dl
+    inc al
+    cmp al, npc1X
+    je check_npc1_y
+    
+    mov al, dl
+    dec al
+    cmp al, npc1X
+    jne check_npc2_collision
+    
+check_npc1_y:
+    ; Now check Y coordinate (exact or adjacent)
+    mov al, dh
+    cmp al, npc1Y
+    je npc_collision_found
+    
+    mov al, dh
+    inc al
+    cmp al, npc1Y
+    je npc_collision_found
+    
+    mov al, dh
+    dec al
+    cmp al, npc1Y
+    je npc_collision_found
+    
+check_npc2_collision:
+    ; Check NPC2 - exact position and adjacent positions
+    mov al, dl
+    cmp al, npc2X
+    je check_npc2_y
+    
+    mov al, dl
+    inc al
+    cmp al, npc2X
+    je check_npc2_y
+    
+    mov al, dl
+    dec al
+    cmp al, npc2X
+    jne check_npc3_collision
+    
+check_npc2_y:
+    mov al, dh
+    cmp al, npc2Y
+    je npc_collision_found
+    
+    mov al, dh
+    inc al
+    cmp al, npc2Y
+    je npc_collision_found
+    
+    mov al, dh
+    dec al
+    cmp al, npc2Y
+    je npc_collision_found
+    
+check_npc3_collision:
+    ; Check NPC3 - exact position and adjacent positions
+    mov al, dl
+    cmp al, npc3X
+    je check_npc3_y
+    
+    mov al, dl
+    inc al
+    cmp al, npc3X
+    je check_npc3_y
+    
+    mov al, dl
+    dec al
+    cmp al, npc3X
+    jne no_npc_collision
+    
+check_npc3_y:
+    mov al, dh
+    cmp al, npc3Y
+    je npc_collision_found
+    
+    mov al, dh
+    inc al
+    cmp al, npc3Y
+    je npc_collision_found
+    
+    mov al, dh
+    dec al
+    cmp al, npc3Y
+    je npc_collision_found
+    
+no_npc_collision:
+    mov al, 0
+    ret
+    
+npc_collision_found:
+    mov al, 1
+    ret
+CheckPlayerNPCCollision ENDP
+
 
 
 
@@ -2918,6 +3109,645 @@ UpdatePlayer PROC ; erase player at (xPos,yPos)
     call WriteChar
     ret
 UpdatePlayer ENDP
+
+; =============================================
+; DrawNPCs - Draw all 3 NPC cars
+; =============================================
+DrawNPCs PROC
+    ; Draw NPC1
+    mov eax, magenta + (black * 16)
+    call SetTextColor
+    mov dl, npc1X
+    mov dh, npc1Y
+    call Gotoxy
+    mov al, npcChar
+    call WriteChar
+    
+    ; Draw NPC2
+    mov eax, brown + (black * 16)
+    call SetTextColor
+    mov dl, npc2X
+    mov dh, npc2Y
+    call Gotoxy
+    mov al, npcChar
+    call WriteChar
+    
+    ; Draw NPC3
+    mov eax, cyan + (black * 16)
+    call SetTextColor
+    mov dl, npc3X
+    mov dh, npc3Y
+    call Gotoxy
+    mov al, npcChar
+    call WriteChar
+    
+    ; Restore white color
+    mov eax, white + (black * 16)
+    call SetTextColor
+    ret
+DrawNPCs ENDP
+
+; =============================================
+; EraseNPCs - Erase all 3 NPC cars
+; =============================================
+EraseNPCs PROC
+    ; Erase NPC1
+    mov dl, npc1X
+    mov dh, npc1Y
+    call Gotoxy
+    mov al, ' '
+    call WriteChar
+    
+    ; Erase NPC2
+    mov dl, npc2X
+    mov dh, npc2Y
+    call Gotoxy
+    mov al, ' '
+    call WriteChar
+    
+    ; Erase NPC3
+    mov dl, npc3X
+    mov dh, npc3Y
+    call Gotoxy
+    mov al, ' '
+    call WriteChar
+    ret
+EraseNPCs ENDP
+
+; =============================================
+; MoveNPCs - Move all 3 NPC cars
+; =============================================
+MoveNPCs PROC
+    ; Move NPC1
+    call MoveNPC1
+    
+    ; Move NPC2
+    call MoveNPC2
+    
+    ; Move NPC3
+    call MoveNPC3
+    ret
+MoveNPCs ENDP
+
+; =============================================
+; Helper Procedures - Check if passenger at position
+; =============================================
+
+; CheckNPC1PassengerAtNextPos - Check if passenger at NPC1's next right position
+; Returns: AL = 1 if passenger found, AL = 0 if not
+CheckNPC1PassengerAtNextPos PROC
+    mov ecx, 5
+    mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
+    
+check_npc1_next_loop:
+    mov al, [edi]               ; Check passenger state
+    cmp al, 0                   ; Only check waiting passengers
+    jne skip_npc1_next
+    
+    mov al, [esi]               ; Passenger X
+    mov bl, npc1X
+    inc bl                      ; NPC1's next X position
+    cmp al, bl
+    jne skip_npc1_next
+    
+    mov al, [esi+1]             ; Passenger Y
+    cmp al, npc1Y
+    je passenger_found_npc1     ; Found collision!
+    
+skip_npc1_next:
+    add esi, 2
+    inc edi
+    loop check_npc1_next_loop
+    
+    mov al, 0                   ; No passenger found
+    ret
+    
+passenger_found_npc1:
+    mov al, 1                   ; Passenger found
+    ret
+CheckNPC1PassengerAtNextPos ENDP
+
+; CheckNPC1PassengerAtPrevPos - Check if passenger at NPC1's next left position
+CheckNPC1PassengerAtPrevPos PROC
+    mov ecx, 5
+    mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
+    
+check_npc1_prev_loop:
+    mov al, [edi]
+    cmp al, 0
+    jne skip_npc1_prev
+    
+    mov al, [esi]
+    mov bl, npc1X
+    dec bl                      ; NPC1's previous X position
+    cmp al, bl
+    jne skip_npc1_prev
+    
+    mov al, [esi+1]
+    cmp al, npc1Y
+    je passenger_found_npc1_prev
+    
+skip_npc1_prev:
+    add esi, 2
+    inc edi
+    loop check_npc1_prev_loop
+    
+    mov al, 0
+    ret
+    
+passenger_found_npc1_prev:
+    mov al, 1
+    ret
+CheckNPC1PassengerAtPrevPos ENDP
+
+; CheckNPC2PassengerAtNextPos - Check if passenger at NPC2's next down position
+CheckNPC2PassengerAtNextPos PROC
+    mov ecx, 5
+    mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
+    
+check_npc2_next_loop:
+    mov al, [edi]
+    cmp al, 0
+    jne skip_npc2_next
+    
+    mov al, [esi]
+    cmp al, npc2X
+    jne skip_npc2_next
+    
+    mov al, [esi+1]
+    mov bl, npc2Y
+    inc bl                      ; NPC2's next Y position
+    cmp al, bl
+    je passenger_found_npc2
+    
+skip_npc2_next:
+    add esi, 2
+    inc edi
+    loop check_npc2_next_loop
+    
+    mov al, 0
+    ret
+    
+passenger_found_npc2:
+    mov al, 1
+    ret
+CheckNPC2PassengerAtNextPos ENDP
+
+; CheckNPC2PassengerAtPrevPos - Check if passenger at NPC2's previous up position
+CheckNPC2PassengerAtPrevPos PROC
+    mov ecx, 5
+    mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
+    
+check_npc2_prev_loop:
+    mov al, [edi]
+    cmp al, 0
+    jne skip_npc2_prev
+    
+    mov al, [esi]
+    cmp al, npc2X
+    jne skip_npc2_prev
+    
+    mov al, [esi+1]
+    mov bl, npc2Y
+    dec bl                      ; NPC2's previous Y position
+    cmp al, bl
+    je passenger_found_npc2_prev
+    
+skip_npc2_prev:
+    add esi, 2
+    inc edi
+    loop check_npc2_prev_loop
+    
+    mov al, 0
+    ret
+    
+passenger_found_npc2_prev:
+    mov al, 1
+    ret
+CheckNPC2PassengerAtPrevPos ENDP
+
+; CheckNPC3PassengerAtNextPos - Check if passenger at NPC3's next left position
+CheckNPC3PassengerAtNextPos PROC
+    mov ecx, 5
+    mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
+    
+check_npc3_next_loop:
+    mov al, [edi]
+    cmp al, 0
+    jne skip_npc3_next
+    
+    mov al, [esi]
+    mov bl, npc3X
+    dec bl                      ; NPC3's next X position (moving left)
+    cmp al, bl
+    jne skip_npc3_next
+    
+    mov al, [esi+1]
+    cmp al, npc3Y
+    je passenger_found_npc3
+    
+skip_npc3_next:
+    add esi, 2
+    inc edi
+    loop check_npc3_next_loop
+    
+    mov al, 0
+    ret
+    
+passenger_found_npc3:
+    mov al, 1
+    ret
+CheckNPC3PassengerAtNextPos ENDP
+
+; CheckNPC3PassengerAtPrevPos - Check if passenger at NPC3's previous right position
+CheckNPC3PassengerAtPrevPos PROC
+    mov ecx, 5
+    mov esi, OFFSET passengerPositions
+    mov edi, OFFSET passengerStates
+    
+check_npc3_prev_loop:
+    mov al, [edi]
+    cmp al, 0
+    jne skip_npc3_prev
+    
+    mov al, [esi]
+    mov bl, npc3X
+    inc bl                      ; NPC3's previous X position (moving right)
+    cmp al, bl
+    jne skip_npc3_prev
+    
+    mov al, [esi+1]
+    cmp al, npc3Y
+    je passenger_found_npc3_prev
+    
+skip_npc3_prev:
+    add esi, 2
+    inc edi
+    loop check_npc3_prev_loop
+    
+    mov al, 0
+    ret
+    
+passenger_found_npc3_prev:
+    mov al, 1
+    ret
+CheckNPC3PassengerAtPrevPos ENDP
+
+; =============================================
+; MoveNPC1 - Move NPC1 in fixed 15-step horizontal pattern
+; Moves right 15 steps, then left 15 steps, repeat
+; Speed: moves every 4 game loop cycles
+; =============================================
+MoveNPC1 PROC
+    ; Increment speed counter
+    inc npc1MoveCounter
+    cmp npc1MoveCounter, 220
+    jne npc1_skip_move          ; Only move every 4 cycles
+    mov npc1MoveCounter, 0      ; Reset counter
+    
+    ; Check move mode - NPC1 moves horizontally
+    cmp npc1Direction, 1
+    je npc1_move_away           ; Moving away from start (right)
+    jmp npc1_move_back          ; Moving back to start (left)
+
+npc1_move_away:
+    ; Check if reached 15 steps away
+    cmp npc1StepCount, 15
+    jge npc1_turn_back
+    
+    ; Check if can move right (respect walls and obstacles)
+    mov al, npc1X
+    inc al
+    cmp al, 105                 ; Right boundary check (110 - 5 buffer)
+    jge npc1_turn_back
+    
+    ; Check for obstacles (building, box, tree)
+    mov dl, al
+    mov dh, npc1Y
+    call IsBuilding
+    cmp al, 1
+    je npc1_turn_back
+    mov dl, npc1X
+    inc dl
+    mov dh, npc1Y
+    call IsBox
+    cmp al, 1
+    je npc1_turn_back
+    mov dl, npc1X
+    inc dl
+    mov dh, npc1Y
+    call IsTree
+    cmp al, 1
+    je npc1_turn_back
+    
+    ; Check for passenger collision BEFORE moving
+    mov dl, npc1X
+    inc dl
+    mov dh, npc1Y
+    call IsPassenger
+    cmp al, 1
+    je npc1_turn_back           ; If passenger ahead, turn back
+    
+    ; Move right
+    inc npc1X
+    inc npc1StepCount
+    ret
+
+npc1_turn_back:
+    mov npc1Direction, 0        ; Change to moving back
+    mov npc1StepCount, 0        ; Reset step counter
+    ret
+
+npc1_move_back:
+    ; Check if returned to start
+    cmp npc1StepCount, 15
+    jge npc1_turn_forward
+    
+    ; Check if can move left
+    mov al, npc1X
+    dec al
+    cmp al, 15                  ; Left boundary check (10 + 5 buffer)
+    jle npc1_turn_forward
+    
+    ; Check for obstacles
+    mov dl, al
+    mov dh, npc1Y
+    call IsBuilding
+    cmp al, 1
+    je npc1_turn_forward
+    mov dl, npc1X
+    dec dl
+    mov dh, npc1Y
+    call IsBox
+    cmp al, 1
+    je npc1_turn_forward
+    mov dl, npc1X
+    dec dl
+    mov dh, npc1Y
+    call IsTree
+    cmp al, 1
+    je npc1_turn_forward
+    
+    ; Check for passenger collision BEFORE moving
+    mov dl, npc1X
+    dec dl
+    mov dh, npc1Y
+    call IsPassenger
+    cmp al, 1
+    je npc1_turn_forward        ; If passenger ahead, turn forward
+    
+    ; Move left
+    dec npc1X
+    inc npc1StepCount
+    ret
+
+npc1_turn_forward:
+    mov npc1Direction, 1        ; Change to moving away
+    mov npc1StepCount, 0        ; Reset step counter
+    ret
+
+npc1_skip_move:
+    ret
+MoveNPC1 ENDP
+
+; =============================================
+; MoveNPC2 - Move NPC2 in fixed 15-step vertical pattern
+; Moves down 15 steps, then up 15 steps, repeat
+; Speed: moves every 5 game loop cycles
+; =============================================
+MoveNPC2 PROC
+    ; Increment speed counter
+    inc npc2MoveCounter
+    cmp npc2MoveCounter, 220
+    jne npc2_skip_move          ; Only move every 5 cycles
+    mov npc2MoveCounter, 0      ; Reset counter
+    
+    ; Check move mode - NPC2 moves vertically
+    cmp npc2Direction, 1
+    je npc2_move_away           ; Moving away from start (down)
+    jmp npc2_move_back          ; Moving back to start (up)
+
+npc2_move_away:
+    ; Check if reached 15 steps away
+    cmp npc2StepCount, 15
+    jge npc2_turn_back
+    
+    ; Check if can move down (respect walls and obstacles)
+    mov al, npc2Y
+    inc al
+    cmp al, 25                  ; Bottom boundary check (27 - 2 buffer)
+    jge npc2_turn_back
+    
+    ; Check for obstacles
+    mov dl, npc2X
+    mov dh, al
+    call IsBuilding
+    cmp al, 1
+    je npc2_turn_back
+    mov dl, npc2X
+    mov dh, npc2Y
+    inc dh
+    call IsBox
+    cmp al, 1
+    je npc2_turn_back
+    mov dl, npc2X
+    mov dh, npc2Y
+    inc dh
+    call IsTree
+    cmp al, 1
+    je npc2_turn_back
+    
+    ; Check for passenger collision BEFORE moving
+    mov dl, npc2X
+    mov dh, npc2Y
+    inc dh
+    call IsPassenger
+    cmp al, 1
+    je npc2_turn_back           ; If passenger ahead, turn back
+    
+    ; Move down
+    inc npc2Y
+    inc npc2StepCount
+    ret
+
+npc2_turn_back:
+    mov npc2Direction, 0        ; Change to moving back
+    mov npc2StepCount, 0        ; Reset step counter
+    ret
+
+npc2_move_back:
+    ; Check if returned to start
+    cmp npc2StepCount, 15
+    jge npc2_turn_forward
+    
+    ; Check if can move up
+    mov al, npc2Y
+    dec al
+    cmp al, 8                   ; Top boundary check (5 + 3 buffer)
+    jle npc2_turn_forward
+    
+    ; Check for obstacles
+    mov dl, npc2X
+    mov dh, al
+    call IsBuilding
+    cmp al, 1
+    je npc2_turn_forward
+    mov dl, npc2X
+    mov dh, npc2Y
+    dec dh
+    call IsBox
+    cmp al, 1
+    je npc2_turn_forward
+    mov dl, npc2X
+    mov dh, npc2Y
+    dec dh
+    call IsTree
+    cmp al, 1
+    je npc2_turn_forward
+    
+    ; Check for passenger collision BEFORE moving
+    mov dl, npc2X
+    mov dh, npc2Y
+    dec dh
+    call IsPassenger
+    cmp al, 1
+    je npc2_turn_forward        ; If passenger ahead, turn forward
+    
+    ; Move up
+    dec npc2Y
+    inc npc2StepCount
+    ret
+
+npc2_turn_forward:
+    mov npc2Direction, 1        ; Change to moving away
+    mov npc2StepCount, 0        ; Reset step counter
+    ret
+
+npc2_skip_move:
+    ret
+MoveNPC2 ENDP
+
+; =============================================
+; MoveNPC3 - Move NPC3 in fixed 15-step horizontal pattern
+; Moves left 15 steps, then right 15 steps, repeat
+; Speed: moves every 4 game loop cycles
+; =============================================
+MoveNPC3 PROC
+    ; Increment speed counter
+    inc npc3MoveCounter
+    cmp npc3MoveCounter, 220
+    jne npc3_skip_move          ; Only move every 4 cycles
+    mov npc3MoveCounter, 0      ; Reset counter
+    
+    ; Check move mode - NPC3 moves horizontally
+    cmp npc3Direction, 1
+    je npc3_move_away           ; Moving away from start (left)
+    jmp npc3_move_back          ; Moving back to start (right)
+
+npc3_move_away:
+    ; Check if reached 15 steps away
+    cmp npc3StepCount, 15
+    jge npc3_turn_back
+    
+    ; Check if can move left (respect walls and obstacles)
+    mov al, npc3X
+    dec al
+    cmp al, 15                  ; Left boundary check
+    jle npc3_turn_back
+    
+    ; Check for obstacles
+    mov dl, al
+    mov dh, npc3Y
+    call IsBuilding
+    cmp al, 1
+    je npc3_turn_back
+    mov dl, npc3X
+    dec dl
+    mov dh, npc3Y
+    call IsBox
+    cmp al, 1
+    je npc3_turn_back
+    mov dl, npc3X
+    dec dl
+    mov dh, npc3Y
+    call IsTree
+    cmp al, 1
+    je npc3_turn_back
+    
+    ; Check for passenger collision BEFORE moving
+    mov dl, npc3X
+    dec dl
+    mov dh, npc3Y
+    call IsPassenger
+    cmp al, 1
+    je npc3_turn_back           ; If passenger ahead, turn back
+    
+    ; Move left
+    dec npc3X
+    inc npc3StepCount
+    ret
+
+npc3_turn_back:
+    mov npc3Direction, 0        ; Change to moving back
+    mov npc3StepCount, 0        ; Reset step counter
+    ret
+
+npc3_move_back:
+    ; Check if returned to start
+    cmp npc3StepCount, 15
+    jge npc3_turn_forward
+    
+    ; Check if can move right
+    mov al, npc3X
+    inc al
+    cmp al, 105                 ; Right boundary check
+    jge npc3_turn_forward
+    
+    ; Check for obstacles
+    mov dl, al
+    mov dh, npc3Y
+    call IsBuilding
+    cmp al, 1
+    je npc3_turn_forward
+    mov dl, npc3X
+    inc dl
+    mov dh, npc3Y
+    call IsBox
+    cmp al, 1
+    je npc3_turn_forward
+    mov dl, npc3X
+    inc dl
+    mov dh, npc3Y
+    call IsTree
+    cmp al, 1
+    je npc3_turn_forward
+    
+    ; Check for passenger collision BEFORE moving
+    mov dl, npc3X
+    inc dl
+    mov dh, npc3Y
+    call IsPassenger
+    cmp al, 1
+    je npc3_turn_forward        ; If passenger ahead, turn forward
+    
+    ; Move right
+    inc npc3X
+    inc npc3StepCount
+    ret
+
+npc3_turn_forward:
+    mov npc3Direction, 1        ; Change to moving away
+    mov npc3StepCount, 0        ; Reset step counter
+    ret
+
+npc3_skip_move:
+    ret
+MoveNPC3 ENDP
 
 
 
