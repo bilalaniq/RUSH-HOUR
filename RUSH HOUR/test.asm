@@ -81,6 +81,8 @@ strTryAgain  BYTE "Try Again?  1=yes, 0=no",               0
 invalidInput BYTE "invalid input",                         0
 strYouDied   BYTE "you died ",                             0
 strPoints    BYTE " point(s)",                             0
+strCarrying  BYTE "Carrying passenger: ",                  0
+strWaiting   BYTE "Passengers waiting: ",                  0
 blank        BYTE "                                     ", 0
 
 ; Represent the car (player vehicle) using 'T' characters (single char per segment)
@@ -1657,8 +1659,7 @@ drawCar_loop:
     call MoveNPCs
     call DrawNPCs
     
-    ; Check if player collided with any NPC
-    ; TODO: Implement NPC collision detection here
+   
 
     ; get user key input
     call ReadKey  ; No Key Pressed → ZF = 1 (Zero Flag SET) on Key Pressed call ReadKey → ZF = 0 (Zero Flag CLEAR)
@@ -2013,12 +2014,19 @@ noMoveUp:
     cmp al, 1
     je npc_collision
     
+    ; Check if player reached coin position
     mov  al, xPos[0]
     cmp  al, xCoinPos
     jne  no_eat
     mov  al, yPos[0]
     cmp  al, yCoinPos
     jne  no_eat
+    
+    ; Only auto-eat coin if NOT carrying a passenger
+    ; (If carrying, HandlePickupDrop will handle the delivery)
+    cmp  pickedUpPassenger, 1
+    je   no_eat
+    
     call EatingCoin
     jmp  gameLoop
 
@@ -2619,47 +2627,49 @@ GenerateValidPosition ENDP
 ; =============================================
 ; GenerateForcedPosition - generates a forced position when random fails
 ; Returns: BL = X, BH = Y
+; Uses safe positions with increased spacing to avoid obstacles
 ; =============================================
 GenerateForcedPosition PROC
-    ; Use predefined positions that are guaranteed to be within walls
+    ; Use predefined positions that are guaranteed to be accessible
     ; Walls: X=11-109, Y=6-26
+    ; These positions are spread out across the playable area
     
     movzx ecx, passengerCount
     cmp ecx, 0
     jne passenger_1
-    ; Position 0: center (within bounds: X=60, Y=15)
-    mov bl, 60
-    mov bh, 15
+    ; Position 0: top-left area (X=20, Y=8)
+    mov bl, 100
+    mov bh, 8
     ret
     
 passenger_1:
     cmp ecx, 1
     jne passenger_2
-    ; Position 1: right of center (X=70, Y=15)
-    mov bl, 70
-    mov bh, 15
+    ; Position 1: top-right area (X=100, Y=8)
+    mov bl, 100
+    mov bh, 8
     ret
     
 passenger_2:
     cmp ecx, 2
     jne passenger_3
-    ; Position 2: left of center (X=50, Y=15)
-    mov bl, 50
-    mov bh, 15
+    ; Position 2: center area (X=60, Y=16)
+    mov bl, 60
+    mov bh, 16
     ret
     
 passenger_3:
     cmp ecx, 3
     jne passenger_4
-    ; Position 3: above center (X=60, Y=10)
-    mov bl, 60
-    mov bh, 10
+    ; Position 3: bottom-left area (X=20, Y=24)
+    mov bl, 20
+    mov bh, 24
     ret
     
 passenger_4:
-    ; Position 4: below center (X=60, Y=20)
-    mov bl, 60
-    mov bh, 20
+    ; Position 4: bottom-right area (X=100, Y=24)
+    mov bl, 100
+    mov bh, 24
     ret
 GenerateForcedPosition ENDP
 
@@ -2839,98 +2849,24 @@ IsPassenger ENDP
 ; Output: AL = 1 if collision with NPC, AL = 0 if no collision
 ; =============================================
 CheckPlayerNPCCollision PROC
-    ; Check NPC1 - exact position and adjacent positions
-    mov al, dl
-    cmp al, npc1X
-    je check_npc1_y
-    
-    ; Check if player is adjacent to NPC1 (±1 tile)
-    mov al, dl
-    inc al
-    cmp al, npc1X
-    je check_npc1_y
-    
-    mov al, dl
-    dec al
-    cmp al, npc1X
+    ; Check NPC1
+    cmp dl, npc1X
     jne check_npc2_collision
-    
-check_npc1_y:
-    ; Now check Y coordinate (exact or adjacent)
-    mov al, dh
-    cmp al, npc1Y
-    je npc_collision_found
-    
-    mov al, dh
-    inc al
-    cmp al, npc1Y
-    je npc_collision_found
-    
-    mov al, dh
-    dec al
-    cmp al, npc1Y
+    cmp dh, npc1Y
     je npc_collision_found
     
 check_npc2_collision:
-    ; Check NPC2 - exact position and adjacent positions
-    mov al, dl
-    cmp al, npc2X
-    je check_npc2_y
-    
-    mov al, dl
-    inc al
-    cmp al, npc2X
-    je check_npc2_y
-    
-    mov al, dl
-    dec al
-    cmp al, npc2X
+    ; Check NPC2
+    cmp dl, npc2X
     jne check_npc3_collision
-    
-check_npc2_y:
-    mov al, dh
-    cmp al, npc2Y
-    je npc_collision_found
-    
-    mov al, dh
-    inc al
-    cmp al, npc2Y
-    je npc_collision_found
-    
-    mov al, dh
-    dec al
-    cmp al, npc2Y
+    cmp dh, npc2Y
     je npc_collision_found
     
 check_npc3_collision:
-    ; Check NPC3 - exact position and adjacent positions
-    mov al, dl
-    cmp al, npc3X
-    je check_npc3_y
-    
-    mov al, dl
-    inc al
-    cmp al, npc3X
-    je check_npc3_y
-    
-    mov al, dl
-    dec al
-    cmp al, npc3X
+    ; Check NPC3
+    cmp dl, npc3X
     jne no_npc_collision
-    
-check_npc3_y:
-    mov al, dh
-    cmp al, npc3Y
-    je npc_collision_found
-    
-    mov al, dh
-    inc al
-    cmp al, npc3Y
-    je npc_collision_found
-    
-    mov al, dh
-    dec al
-    cmp al, npc3Y
+    cmp dh, npc3Y
     je npc_collision_found
     
 no_npc_collision:
@@ -3073,6 +3009,47 @@ DrawScoreboard PROC
 	; Display score value
 	movzx eax, score        ; Load current score (0-255)
 	call WriteInt           ; Display as integer
+	
+	; Display passenger status
+	mov  dl,  2
+	mov  dh,  2
+	call Gotoxy
+	
+	; Show current passenger being carried
+	mov  al, pickedUpPassenger
+	cmp  al, 1
+	jne  not_carrying
+	
+	mov  edx, OFFSET strCarrying
+	call WriteString
+	
+	; Show which passenger index
+	movzx eax, currentPassenger
+	call WriteInt
+	jmp  passenger_display_done
+	
+not_carrying:
+	mov  edx, OFFSET strWaiting
+	call WriteString
+	
+	; Show how many passengers left
+	mov  ecx, 0
+	mov  esi, OFFSET passengerStates
+	mov  ebx, 5
+count_waiting:
+	mov  al, [esi]
+	cmp  al, 0
+	jne  skip_count
+	inc  ecx
+skip_count:
+	inc  esi
+	dec  ebx
+	jnz  count_waiting
+	
+	movzx eax, cl
+	call WriteInt
+	
+passenger_display_done:
 	ret
 DrawScoreboard ENDP
 
@@ -3753,22 +3730,11 @@ MoveNPC3 ENDP
 
 
 ; =============================================
-; DrawCoin - draws destination at (xCoinPos,yCoinPos)
-; GREEN when passenger picked up, BLUE otherwise
+; DrawDestination - draws destination at (xCoinPos,yCoinPos)
+; GREEN color with "D" symbol
 ; =============================================
-DrawCoin PROC
-    ; Check if carrying a passenger - if so, destination is green
-    cmp pickedUpPassenger, 1
-    je draw_destination_green
-    
-    ; No passenger - draw in blue
-    mov eax, blue + (blue * 16)
-    jmp draw_coin_colored
-
-draw_destination_green:
+DrawDestination PROC
     mov eax, green + (black * 16)
-
-draw_coin_colored:
     call SetTextColor
     mov dl, xCoinPos
     mov dh, yCoinPos
@@ -3778,12 +3744,47 @@ draw_coin_colored:
     mov eax, white + (black * 16)
     call SetTextColor
     ret
+DrawDestination ENDP
+
+; =============================================
+; DrawBonusPoint - draws bonus point at (xCoinPos,yCoinPos)
+; BLUE color with "*" symbol
+; =============================================
+DrawBonusPoint PROC
+    mov eax, blue + (black * 16)
+    call SetTextColor
+    mov dl, xCoinPos
+    mov dh, yCoinPos
+    call Gotoxy
+    mov al, "*"             ; * for bonus point
+    call WriteChar
+    mov eax, white + (black * 16)
+    call SetTextColor
+    ret
+DrawBonusPoint ENDP
+
+; =============================================
+; DrawCoin - draws destination or bonus point based on passenger status
+; GREEN destination when passenger picked up, BLUE bonus point otherwise
+; =============================================
+DrawCoin PROC
+    ; Check if carrying a passenger - if so, draw destination in green
+    cmp pickedUpPassenger, 1
+    je draw_destination_call
+    
+    ; No passenger - draw bonus point in blue
+    call DrawBonusPoint
+    ret
+
+draw_destination_call:
+    call DrawDestination
+    ret
 DrawCoin ENDP
 
 
 
 ; =============================================
-; CreateRandomCoin - creates random coin position
+; ` - creates random coin position
 ; =============================================
 CreateRandomCoin PROC ;procedure to create a random coin
     ; Generate X between (xPosWall[0]+1) .. (xPosWall[2]-1)
@@ -3882,8 +3883,8 @@ check_pickup_loop:
     ; Generate destination at coin position
     call CreateRandomCoin
     
-    ; Redraw screen
-    call DrawCoin
+    ; Redraw destination marker (green D)
+    call DrawDestination
     ret
     
 next_pickup_check:
@@ -3927,18 +3928,24 @@ try_dropoff:
     ; Update display
     call DrawScoreboard
     
-    ; Clear pickup state
+    ; Clear pickup state - ready for next passenger
     mov pickedUpPassenger, 0
     mov currentPassenger, 255
     
-    ; Check if all passengers are delivered
+    ; Check if ALL passengers are delivered (all have state 2)
     call CheckAllPassengersDelivered
     cmp al, 1
-    jne drop_not_at_dest
+    jne next_passenger_ready
     
-    ; If all delivered, reset all passengers to waiting state
+    ; All passengers delivered - reset for next round
     call ResetAllPassengers
-    call DrawPassengers  ; Redraw all waiting passengers
+    call CreatePassengers           ; Create new set of passengers
+    call DrawPassengers             ; Draw all waiting passengers
+    jmp drop_not_at_dest
+    
+next_passenger_ready:
+    ; Some passengers still waiting - redraw them
+    call DrawPassengers
     
 drop_not_at_dest:
     ret
@@ -3984,20 +3991,18 @@ ResetAllPassengers ENDP
 
 
 ; =============================================
-; EatingCoin - handles when car eats coin (now for destinations)
+; EatingCoin - handles when car eats bonus point (not carrying passenger)
 ; =============================================
 EatingCoin       PROC
-    ; car is eating coin - single 'T' car: just increase score and respawn coin
+    ; car is eating bonus coin - increase score and respawn coin
     add score, 10
     call CreateRandomCoin
     
-    call DrawCoin
-
-    mov  dl, 17    ; write updated score
-    mov  dh, 1
-    call Gotoxy
-    mov  al, score
-    call WriteInt
+    ; Redraw the new bonus point
+    call DrawBonusPoint
+    
+    ; Update scoreboard display
+    call DrawScoreboard
     ret
 EatingCoin ENDP
 
