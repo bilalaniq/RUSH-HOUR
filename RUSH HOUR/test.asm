@@ -255,6 +255,21 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
     gameModeLine5 BYTE "           \____|\__,_|_| |_| |_|\___|_|  |_|\___/ \__,_|\___|", 0
 
 
+    nameTitle BYTE "           _   _                     ",  0
+    nameLine2 BYTE "          | \ | | __ _ _ __ ___   ___", 0
+    nameLine3 BYTE "          |  \| |/ _` | '_ ` _ \ / _ \", 0
+    nameLine4 BYTE "          | |\  | (_| | | | | | |  __/", 0
+    nameLine5 BYTE "          |_| \_|\__,_|_| |_| |_|\___|", 0
+
+
+
+                   
+ 
+
+
+
+
+
     gameModePrompt BYTE "Select your game mode:", 0Dh, 0Ah, 0
     careerModeOpt  BYTE "  1. Career Mode   - Complete progressively difficult levels", 0Dh, 0Ah, 0
     timeModeOpt    BYTE "  2. Time Mode     - Pick up and deliver passengers within time limits", 0Dh, 0Ah, 0
@@ -289,8 +304,9 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
 
     
     pauseMsg         BYTE "The game is paused.", 0Dh, 0Ah, 0
-    resumeMsg        BYTE "Press any key to resume or 'Q' to quit to menu...", 0
+    resumeMsg        BYTE "Press any key to resume, 'Q' to quit, or 'S' to save...", 0
     quitToMenuMsg    BYTE "Returning to main menu...", 0
+    savingMsg        BYTE "Saving score to leaderboard...", 0
     
     ; Pause state
     isPaused         BYTE 0              ; 0 = not paused, 1 = paused
@@ -474,6 +490,12 @@ start_new_game:
     call GameModeSelectionScreen
     ; call start_game
     call Clrscr
+    
+    ; Initialize score to 0 for new game
+    mov score, 0
+    ; Reset leaderboard count so we load from file fresh
+    mov LeaderBoardCount, 0
+    
     call DrawWall         ;draw walls
     call DrawScoreboard   ;draw scoreboard
     call DrawBuildings
@@ -688,6 +710,40 @@ SelectTaxiScreen ENDP
 EnterPlayer_Name PROC
     call Clrscr
     call SetDynamicColor_WRY
+
+
+    
+   call Clrscr
+    mov dh, 1
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET nameTitle
+    call WriteString
+    mov dh, 2
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET nameLine2
+    call WriteString
+    mov dh, 3
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET nameLine3
+    call WriteString
+    mov dh, 4
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET nameLine4
+    call WriteString
+    mov dh, 5
+    mov dl, 10
+    call Gotoxy
+    mov edx, OFFSET nameLine5
+    call WriteString
+
+
+    call Crlf
+    call Crlf
+
 
     mov  edx, OFFSET Car_line1
     call WriteString
@@ -1051,76 +1107,135 @@ CopyString            ENDP
 ; Input: EAX = score, EDX = player name address
 ; =============================================
 AddScoreToLeaderboard PROC
-    push eax
-    push edx
+    ; Save the input parameters in registers that won't be clobbered
+    mov ebx, eax        ; Save score in EBX
+    mov esi, edx        ; Save player name address in ESI
     
+    ; Initialize LeaderBoardCount to 0 first
+    mov LeaderBoardCount, 0
+    
+    ; Try to load existing leaderboard data from file
+    mov  edx,        OFFSET highscoresFile
+    call OpenInputFile
+    mov  fileHandle, eax
+
+    cmp fileHandle, INVALID_HANDLE_VALUE
+    je  check_board_full      ; File doesn't exist, start fresh
+
+    ; Try to read the count
+    mov  edx, OFFSET LeaderBoardCount
+    mov  ecx, SIZEOF LeaderBoardCount
+    call ReadFromFile
+
+    ; Check if we successfully read a valid count
+    mov ecx, LeaderBoardCount
+    cmp ecx, 0
+    je  file_empty       ; No entries in file
+
+    cmp ecx, 10
+    jbe load_existing_data  ; Count is valid (1-10), load the data
+
+file_empty:
+    ; File exists but is empty
+    mov  eax, fileHandle
+    call CloseFile
+    mov LeaderBoardCount, 0
+    jmp check_board_full
+
+load_existing_data:
+    ; Load existing scores and names
+    mov edi, 0           ; Use EDI as loop counter
+load_existing_loop:
+    ; Read name
+    mov  eax, edi
+    mov  ecx, 20
+    mul  ecx
+    mov  edx, OFFSET LeaderBoardNames
+    add  edx, eax
+    mov  eax, fileHandle      ; Load file handle
+    mov  ecx, 20
+    call ReadFromFile
+
+    ; Read score
+    mov  eax, edi
+    mov  ecx, 4
+    mul  ecx
+    mov  edx, OFFSET LeaderBoardScores
+    add  edx, eax
+    mov  eax, fileHandle      ; Load file handle again
+    mov  ecx, 4
+    call ReadFromFile
+
+    inc edi
+    cmp edi, LeaderBoardCount
+    jb  load_existing_loop
+
+    mov  eax, fileHandle
+    call CloseFile
+
+check_board_full:
     cmp LeaderBoardCount, 10
     jb  add_new_score
 
     ; Check if new score is higher than lowest score
-    mov esi, 9
-    mov eax, esi
+    mov eax, 9
     mov ecx, 4
     mul ecx
-    mov ebx, OFFSET LeaderBoardScores
-    add ebx, eax                      ; EBX = address of score[9]
-    mov ecx, [ebx]                    ; ECX = lowest score value
+    mov edx, OFFSET LeaderBoardScores
+    add edx, eax                      ; EDX = address of score[9]
+    mov ecx, [edx]                    ; ECX = lowest score value
     
-    ; Restore and compare
-    pop  edx
-    pop  eax
-    push eax
-    push edx
-    
-    cmp eax, ecx ; Compare new score with lowest
+    cmp ebx, ecx ; Compare new score with lowest (ebx contains score)
     jbe no_add
 
     ; Replace lowest score
-    mov  esi, 9
-    ; Copy name
-    mov  eax, esi
-    mov  ebx, 20
-    mul  ebx                          ; EAX = 9 × 20 = 180
+    mov  eax, 9
+    mov  ecx, 20
+    mul  ecx                          ; EAX = 9 × 20 = 180
     mov  edi, OFFSET LeaderBoardNames
     add  edi, eax
-    mov  esi, edx                     ; Source name
+    mov  edx, esi                     ; Source name (ESI contains name address)
     mov  ecx, 20
-    call CopyString                   ; Copy new name
+    
+    ; Call CopyString: ESI = source, EDI = destination, ECX = count
+    push esi
+    mov esi, edx
+    call CopyString
+    pop esi
     
     ; Store score
-    mov  esi,   9
-    mov  eax,   esi
-    mov  ebx,   4
-    mul  ebx
-    mov  edi,   OFFSET LeaderBoardScores
-    add  edi,   eax                      ; EDI = address of score[9]
-    pop  eax
-    push eax
-    mov  [edi], eax                      ; Store new score
+    mov  eax, 9
+    mov  ecx, 4
+    mul  ecx
+    mov  edi, OFFSET LeaderBoardScores
+    add  edi, eax                     ; EDI = address of score[9]
+    mov  eax, ebx                     ; EAX = score (stored in ebx)
+    mov  [edi], eax                   ; Store new score
     jmp  sort_scores
 
 add_new_score:
     ; Add to end
-    mov  esi, LeaderBoardCount
-    ; Copy name
-    mov  eax, esi
-    mov  ebx, 20
-    mul  ebx
+    mov  eax, LeaderBoardCount
+    mov  ecx, 20
+    mul  ecx
     mov  edi, OFFSET LeaderBoardNames
     add  edi, eax
-    mov  esi, edx                     ; Source name
+    mov  edx, esi                     ; Source name (ESI contains name address)
     mov  ecx, 20
+    
+    ; Call CopyString: ESI = source, EDI = destination, ECX = count
+    push esi
+    mov esi, edx
     call CopyString
+    pop esi
     
     ; Store score
-    mov  esi,   LeaderBoardCount
-    mov  eax,   esi
-    mov  ebx,   4
-    mul  ebx
-    mov  edi,   OFFSET LeaderBoardScores
-    add  edi,   eax
-    pop  eax
-    push eax
+    mov  eax, LeaderBoardCount
+    mov  ecx, 4
+    mul  ecx
+    mov  edi, OFFSET LeaderBoardScores
+    add  edi, eax
+    mov  eax, ebx                     ; EAX = score (stored in ebx)
     mov  [edi], eax
     
     inc LeaderBoardCount
@@ -1210,8 +1325,6 @@ save_leaderboard:
     call saveLeaderBoard
 
 no_add:
-    pop edx
-    pop eax
     ret
 AddScoreToLeaderboard ENDP
 
@@ -1358,13 +1471,6 @@ done_display:
     call ReadChar
     ret
 DisplayLeaderboard ENDP
-
-
-
-
-
-
-
 
 
 
@@ -1647,13 +1753,13 @@ handle_spacebar:
     jmp gameLoop
 
 pause_game:
-    ; Pause menu at top-right corner of screen
+    ; Pause menu at top-left corner of screen (narrower to fit terminal)
     mov dh, 0
-    mov dl, 27
+    mov dl, 10
     call Gotoxy
     mov al, 201         ; ╔
     call WriteChar
-    mov ecx, 50
+    mov ecx, 35
     mov al, 205         ; ═
     clear_top:
     call WriteChar
@@ -1662,12 +1768,12 @@ pause_game:
     call WriteChar
     
     mov dh, 1
-    mov dl, 27
+    mov dl, 10
     call Gotoxy
     mov al, 186         ; ║
     call WriteChar
     mov al, ' '
-    mov ecx, 50
+    mov ecx, 35
     pause_space1:
     call WriteChar
     loop pause_space1
@@ -1675,18 +1781,18 @@ pause_game:
     call WriteChar
     
     mov dh, 1
-    mov dl, 29
+    mov dl, 12
     call Gotoxy
     mov edx, OFFSET pauseMsg
     call WriteString
     
     mov dh, 2
-    mov dl, 27
+    mov dl, 10
     call Gotoxy
     mov al, 186         ; ║
     call WriteChar
     mov al, ' '
-    mov ecx, 50
+    mov ecx, 35
     pause_space2:
     call WriteChar
     loop pause_space2
@@ -1694,17 +1800,17 @@ pause_game:
     call WriteChar
     
     mov dh, 2
-    mov dl, 29
+    mov dl, 12
     call Gotoxy
     mov edx, OFFSET resumeMsg
     call WriteString
     
     mov dh, 3
-    mov dl, 27
+    mov dl, 10
     call Gotoxy
     mov al, 200         ; ╚
     call WriteChar
-    mov ecx, 50
+    mov ecx, 35
     mov al, 205         ; ═
     clear_bot:
     call WriteChar
@@ -1715,44 +1821,50 @@ pause_game:
     ; Wait for input
     call ReadChar
     
+    ; Check if save
+    cmp al, 's'
+    je pause_save_score
+    cmp al, 'S'
+    je pause_save_score
+    
     ; Check if quit
     cmp al, 'q'
     je pause_quit_to_menu
     cmp al, 'Q'
     je pause_quit_to_menu
     
-    ; Clear pause box lines - clear entire row from column 27-80
+    ; Clear pause box lines - clear entire row from column 10-47
     mov dh, 0
-    mov dl, 27
+    mov dl, 10
     call Gotoxy
-    mov ecx, 54          ; 27 to 80 = 54 chars (80-27+1)
+    mov ecx, 38          ; 10 to 47 = 38 chars
     mov al, ' '
     clear_pause_line1:
     call WriteChar
     loop clear_pause_line1
     
     mov dh, 1
-    mov dl, 27
+    mov dl, 10
     call Gotoxy
-    mov ecx, 54
+    mov ecx, 38
     mov al, ' '
     clear_pause_line2:
     call WriteChar
     loop clear_pause_line2
     
     mov dh, 2
-    mov dl, 27
+    mov dl, 10
     call Gotoxy
-    mov ecx, 54
+    mov ecx, 38
     mov al, ' '
     clear_pause_line3:
     call WriteChar
     loop clear_pause_line3
     
     mov dh, 3
-    mov dl, 27
+    mov dl, 10
     call Gotoxy
-    mov ecx, 54
+    mov ecx, 38
     mov al, ' '
     clear_pause_line4:
     call WriteChar
@@ -1760,6 +1872,64 @@ pause_game:
     
     ; Resume - continue game
     jmp gameLoop
+
+pause_save_score:
+    ; Clear pause box first
+    mov dh, 0
+    mov dl, 10
+    call Gotoxy
+    mov ecx, 38
+    mov al, ' '
+    clear_save_line1:
+    call WriteChar
+    loop clear_save_line1
+    
+    mov dh, 1
+    mov dl, 10
+    call Gotoxy
+    mov ecx, 38
+    mov al, ' '
+    clear_save_line2:
+    call WriteChar
+    loop clear_save_line2
+    
+    mov dh, 2
+    mov dl, 10
+    call Gotoxy
+    mov ecx, 38
+    mov al, ' '
+    clear_save_line3:
+    call WriteChar
+    loop clear_save_line3
+    
+    mov dh, 3
+    mov dl, 10
+    call Gotoxy
+    mov ecx, 38
+    mov al, ' '
+    clear_save_line4:
+    call WriteChar
+    loop clear_save_line4
+    
+    ; Prepare to save score: EAX = score, EDX = player name
+    movzx eax, score              ; Get current score into EAX
+    mov   edx, OFFSET PlayerName  ; Get player name address
+    call  AddScoreToLeaderboard   ; Add score to leaderboard and save
+    
+    ; Display saving message
+    mov dh, 12
+    mov dl, 10
+    call Gotoxy
+    mov eax, yellow + (black * 16)
+    call SetTextColor
+    mov edx, OFFSET savingMsg
+    call WriteString
+    
+    ; Wait a moment then return to menu
+    mov eax, 1000
+    call delay
+    
+    jmp pause_quit_to_menu  ; Return to menu after saving
     
 pause_quit_to_menu:
     ret
