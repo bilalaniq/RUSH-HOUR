@@ -1,100 +1,95 @@
+; i have used https://csc.csudh.edu/mmccullough/asm/help/index.html?page=source%2Fabout.htm as reference for irvine32 library functions and syntax it has helped me alot but there are still some functuions not even mentioned there it is not a complete reference but it helped me alot
+
+; functions which are not mentioned in the above reference will be commented with explanation where used and at the end of the code 
+
+
 .386
-.MODEL flat, stdcall
-.STACK 4096
+.MODEL        flat, stdcall
+.STACK        4096
 
 ; =============================================
 ; Irvine32 Library Includes
 ; =============================================
-INCLUDE      Irvine32.inc
-INCLUDELIB   Irvine32.lib
-INCLUDELIB   kernel32.lib
-INCLUDELIB   user32.lib
+INCLUDE       Irvine32.inc
+INCLUDELIB    Irvine32.lib
+INCLUDELIB    kernel32.lib
+INCLUDELIB    user32.lib
 
 ; =============================================
 ; .data
 ; =============================================
 .data
 
-
-
-
-
-boxPositions BYTE 14 DUP(0)  ; 7 boxes × 2 bytes (X,Y)
+boxPositions  BYTE 14 DUP(0) ; 7 boxes × 2 bytes (X,Y)
 treePositions BYTE 14 DUP(0) ; 7 trees × 2 bytes (X,Y)
-boxCount BYTE 0
-treeCount BYTE 0
+boxCount      BYTE 0
+treeCount     BYTE 0
 
-boxChar BYTE 'B'    ; Simple character for box
-treeChar BYTE 157  ; Simple character for tree
-
-
+boxChar       BYTE 'B'       ; Simple character for box
+treeChar      BYTE 157       ; Simple character for tree
 
 
-  ; =============================================
+; =============================================
 ; NPC Data - 3 NPC Cars with fixed movement patterns (15 steps back and forth)
 ; =============================================
 ; NPC Car 1 - Horizontal movement (left-right)
-npc1X          BYTE 30        ; NPC1 current X position
-npc1Y          BYTE 10        ; NPC1 current Y position  
-npc1StartX     BYTE 30        ; NPC1 starting X (reference point)
-npc1StartY     BYTE 10        ; NPC1 starting Y (reference point)
-npc1Direction  BYTE 1         ; NPC1 direction: 1=moving away, 0=moving back
-npc1StepCount  BYTE 0         ; NPC1 step counter (0-15)
-npc1MoveMode   BYTE 1         ; NPC1 move mode: 1=horizontal, 2=vertical
-npc1MoveCounter BYTE 0        ; NPC1 speed counter (moves every 4 cycles)
+npc1X                   BYTE 30                                                  ; NPC1 current X position
+npc1Y                   BYTE 10                                                  ; NPC1 current Y position  
+npc1StartX              BYTE 30                                                  ; NPC1 starting X (reference point)
+npc1StartY              BYTE 10                                                  ; NPC1 starting Y (reference point)
+npc1Direction           BYTE 1                                                   ; NPC1 direction: 1=moving away, 0=moving back
+npc1StepCount           BYTE 0                                                   ; NPC1 step counter (0-15)
+npc1MoveMode            BYTE 1                                                   ; NPC1 move mode: 1=horizontal, 2=vertical
+npc1MoveCounter         BYTE 0                                                   ; NPC1 speed counter (moves every 4 cycles)
 
 ; NPC Car 2 - Vertical movement (up-down)
-npc2X          BYTE 60        ; NPC2 current X position
-npc2Y          BYTE 12        ; NPC2 current Y position  
-npc2StartX     BYTE 60        ; NPC2 starting X (reference point)
-npc2StartY     BYTE 12        ; NPC2 starting Y (reference point)
-npc2Direction  BYTE 1         ; NPC2 direction: 1=moving away, 0=moving back
-npc2StepCount  BYTE 0         ; NPC2 step counter (0-15)
-npc2MoveMode   BYTE 2         ; NPC2 move mode: 1=horizontal, 2=vertical
-npc2MoveCounter BYTE 0        ; NPC2 speed counter (moves every 5 cycles)
+npc2X                   BYTE 60                                                  ; NPC2 current X position
+npc2Y                   BYTE 12                                                  ; NPC2 current Y position  
+npc2StartX              BYTE 60                                                  ; NPC2 starting X (reference point)
+npc2StartY              BYTE 12                                                  ; NPC2 starting Y (reference point)
+npc2Direction           BYTE 1                                                   ; NPC2 direction: 1=moving away, 0=moving back
+npc2StepCount           BYTE 0                                                   ; NPC2 step counter (0-15)
+npc2MoveMode            BYTE 2                                                   ; NPC2 move mode: 1=horizontal, 2=vertical
+npc2MoveCounter         BYTE 0                                                   ; NPC2 speed counter (moves every 5 cycles)
 
 ; NPC Car 3 - Horizontal movement (right-left)
-npc3X          BYTE 90        ; NPC3 current X position
-npc3Y          BYTE 18        ; NPC3 current Y position  
-npc3StartX     BYTE 90        ; NPC3 starting X (reference point)
-npc3StartY     BYTE 18        ; NPC3 starting Y (reference point)
-npc3Direction  BYTE 1         ; NPC3 direction: 1=moving away, 0=moving back
-npc3StepCount  BYTE 0         ; NPC3 step counter (0-15)
-npc3MoveMode   BYTE 1         ; NPC3 move mode: 1=horizontal, 2=vertical
-npc3MoveCounter BYTE 0        ; NPC3 speed counter (moves every 4 cycles)
+npc3X                   BYTE 90                                                  ; NPC3 current X position
+npc3Y                   BYTE 18                                                  ; NPC3 current Y position  
+npc3StartX              BYTE 90                                                  ; NPC3 starting X (reference point)
+npc3StartY              BYTE 18                                                  ; NPC3 starting Y (reference point)
+npc3Direction           BYTE 1                                                   ; NPC3 direction: 1=moving away, 0=moving back
+npc3StepCount           BYTE 0                                                   ; NPC3 step counter (0-15)
+npc3MoveMode            BYTE 1                                                   ; NPC3 move mode: 1=horizontal, 2=vertical
+npc3MoveCounter         BYTE 0                                                   ; NPC3 speed counter (moves every 4 cycles)
 
-npcChar        BYTE 'C'       ; NPC character
-
-
+npcChar                 BYTE 'C'                                                 ; NPC character
 
 
 ; Building position storage - tracks all placed buildings
-buildingPositions BYTE 200 DUP(0)  ; Stores X,Y pairs for each building block
-buildingCountPlaced BYTE 0         ; Number of buildings actually placed
+buildingPositions       BYTE 200 DUP(0)                                          ; Stores X,Y pairs for each building block
+buildingCountPlaced     BYTE 0                                                   ; Number of buildings actually placed
 
+strScore                BYTE "Your score is: ",                       0
+score                   BYTE 0
 
-
-strScore     BYTE "Your score is: ",                       0
-score        BYTE 0
-
-strTryAgain  BYTE "Try Again?  1=yes, 0=no",               0
-invalidInput BYTE "invalid input",                         0
-strYouDied   BYTE "you died ",                             0
-strPoints    BYTE " point(s)",                             0
-strLevelComplete BYTE "*** LEVEL COMPLETE! ***",          0
-str4PassengersDelivered BYTE "4 Passengers Successfully Delivered!", 0
-strYourScore BYTE "Your Score: ",                         0
-strCarrying  BYTE "Carrying passenger: ",                  0
-strWaiting   BYTE "Passengers waiting: ",                  0
-blank        BYTE "                                     ", 0
+strTryAgain             BYTE "Try Again?  1=yes, 0=no",               0
+invalidInput            BYTE "invalid input",                         0
+strYouDied              BYTE "you died ",                             0
+strPoints               BYTE " point(s)",                             0
+strLevelComplete        BYTE "*** LEVEL COMPLETE! ***",               0
+str4PassengersDelivered BYTE "4 Passengers Successfully Delivered!",  0
+strYourScore            BYTE "Your Score: ",                          0
+strCarrying             BYTE "Carrying passenger: ",                  0
+strWaiting              BYTE "Passengers waiting: ",                  0
+blank                   BYTE "                                     ", 0
 
 ; Represent the car (player vehicle) using 'T' characters (single char per segment)
-car          BYTE 'T'
+car                     BYTE 'T'
 
 
 ; Keep only head position (single 'T' car)
-xPos         BYTE 11,                                      100 DUP(?) ; Head X (start near left boundary)
-yPos         BYTE 6,                                      100 DUP(?) ; Head Y
+xPos                    BYTE 11,                                      5 DUP(?) ; Head X (start near left boundary)
+yPos                    BYTE 6,                                       5 DUP(?) ; Head Y
 
 ; Widened wall coordinates: increased right side X from 85 -> 96
 xPosWall BYTE 10,10,110,110			;position of upperLeft, lowerLeft, upperRight, lowerRignt wall 
@@ -120,25 +115,23 @@ yPosWall BYTE 5,27,5,27
 ; (10,27)    (110,27)
 
 
-xCoinPos     BYTE ?
-yCoinPos     BYTE ?
+xCoinPos                BYTE ?
+yCoinPos                BYTE ?
 
 ; Passenger storage (5 passengers × 2 bytes: X,Y)
-passengerPositions BYTE 10 DUP(0)
-passengerCount BYTE 0
-passengerChar BYTE 'P'
+passengerPositions      BYTE 10 DUP(0)
+passengerCount          BYTE 0
+passengerChar           BYTE 'P'
 
 ; Passenger state tracking
-passengerStates BYTE 5 DUP(0)      ; 0=waiting, 1=picked up, 2=delivered
-currentPassenger BYTE 255          ; Index of currently carried passenger (255=none)
-pickedUpPassenger BYTE 0           ; Flag: 0=no passenger, 1=carrying passenger
-destinationColor BYTE 2            ; Green color for destination
+passengerStates         BYTE 5 DUP(0)                                            ; 0=waiting, 1=picked up, 2=delivered
+currentPassenger        BYTE 255                                                 ; Index of currently carried passenger (255=none)
+pickedUpPassenger       BYTE 0                                                   ; Flag: 0=no passenger, 1=carrying passenger
+destinationColor        BYTE 2                                                   ; Green color for destination
 
-inputChar    BYTE "+"                                                 ; + denotes the start of the game
-; lastInputChar removed (unused)
-speed        DWORD 0
-
-            
+inputChar               BYTE "+"                                                 ; + denotes the start of the game
+speed                   DWORD 0
+      
     title_line1  BYTE "                  _____________  ______________  _______  _____________  _________",  0
     title_line2  BYTE "      _           ___  __ \_  / / /_  ___/__  / / /__  / / /_  __ \_  / / /__  __ \", 0
     title_line3  BYTE "   0=[_]=0        __  /_/ /  / / /_____ \__  /_/ /__  /_/ /_  / / /  / / /__  /_/ /", 0
@@ -162,35 +155,32 @@ speed        DWORD 0
     YellowTaxi BYTE "                     2.Yellow Taxi", 0
     Randomcol  BYTE "                     3.Random Taxi", 0
 
-
     prompt2 BYTE "                     Please choose any car you like (1-3): ",                0
     prompt3 BYTE "                     Please enter player Name (show be with in 20 words): ", 0
 
 
-
 ; Add these to your .data section:
-instructions_title    BYTE "              RUSH HOUR TAXI - INSTRUCTIONS", 0
-controls_title       BYTE "CONTROLS:", 0
-control_arrows       BYTE "  Arrow Keys - Move taxi (Up, Down, Left, Right)", 0
-control_space        BYTE "  Spacebar   - Pick up/Drop off passengers", 0
-control_pause        BYTE "  P          - Pause game", 0
+instructions_title BYTE "              RUSH HOUR TAXI - INSTRUCTIONS",           0
+controls_title     BYTE "CONTROLS:",                                             0
+control_arrows     BYTE "  Arrow Keys - Move taxi (Up, Down, Left, Right)",      0
+control_space      BYTE "  Spacebar   - Pick up/Drop off passengers",            0
+control_pause      BYTE "  P          - Pause game",                             0
 
-gameplay_title       BYTE "HOW TO PLAY:", 0
-gameplay1            BYTE "  1. Find passengers (P) and press SPACE to pick up", 0
-gameplay2            BYTE "  2. Drive to green destination and SPACE to drop off", 0
-gameplay3            BYTE "  3. Avoid NPC cars and collect bonus items (X)", 0
+gameplay_title     BYTE "HOW TO PLAY:",                                          0
+gameplay1          BYTE "  1. Find passengers (P) and press SPACE to pick up",   0
+gameplay2          BYTE "  2. Drive to green destination and SPACE to drop off", 0
+gameplay3          BYTE "  3. Avoid NPC cars and collect bonus items (X)",       0
 
-scoring_title        BYTE "SCORING:", 0
-score_passenger      BYTE "  +10 points - Deliver passenger to destination", 0
-score_bonus          BYTE "  +10 points - Collect bonus items (X)", 0
-score_penalty        BYTE "  -5 points  - Hit a pedestrian", 0
+scoring_title      BYTE "SCORING:",                                              0
+score_passenger    BYTE "  +10 points - Deliver passenger to destination",       0
+score_bonus        BYTE "  +10 points - Collect bonus items (X)",                0
+score_penalty      BYTE "  -5 points  - Hit a pedestrian",                       0
 
-taxi_title          BYTE "TAXI DIFFERENCES:", 0
-red_taxi            BYTE "  Red Taxi    : -2 pts (obstacles), -3 pts (cars)", 0
-yellow_taxi         BYTE "  Yellow Taxi : -4 pts (obstacles), -2 pts (cars)", 0
+taxi_title         BYTE "TAXI DIFFERENCES:",                                     0
+red_taxi           BYTE "  Red Taxi    : -2 pts (obstacles), -3 pts (cars)",     0
+yellow_taxi        BYTE "  Yellow Taxi : -4 pts (obstacles), -2 pts (cars)",     0
 
-pressAnyKey         BYTE "Press any key to return to main menu...", 0
-
+pressAnyKey        BYTE "Press any key to return to main menu...",               0
 
 
     PlayerName BYTE 20 DUP(0)
@@ -199,10 +189,6 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
     LeaderBoardNames  BYTE 10 DUP(20 DUP(0))   ; 10 names, each 20 chars
     LeaderBoardScores DWORD 10 DUP(0)
     LeaderBoardCount  DWORD 0
-
-
-
-
 
     SelectTaxi_Line1 BYTE "            _____      _           _     _______         _",  0
     SelectTaxi_Line2 BYTE "           / ____|    | |         | |   |__   __|       (_)", 0
@@ -237,7 +223,7 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
     ; Current selection
     userChoice       BYTE ?
     fileHandle       HANDLE ?
-    UserColourChoice BYTE ?    ; 1 = Red, 2 = Yellow, 3 = Random
+    UserColourChoice BYTE ?   ; 1 = Red, 2 = Yellow, 3 = Random
     PlayerNameLength BYTE ?
     
     ; Missing newGameMsg definition - adding it
@@ -252,52 +238,41 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
 
     ; Game Mode Selection Screen
     gameModeTitle BYTE "            ____                      __  __           _     ",  0
-    gameModeLine2 BYTE "           / ___| __ _ _ __ ___   ___|  \/  | ___   __| | ___", 0
+    gameModeLine2 BYTE "           / ___| __ _ _ __ ___   ___|  \/  | ___   __| | ___",  0
     gameModeLine3 BYTE "          | |  _ / _` | '_ ` _ \ / _ \ |\/| |/ _ \ / _` |/ _ \", 0
     gameModeLine4 BYTE "          | |_| | (_| | | | | | |  __/ |  | | (_) | (_| |  __/", 0
     gameModeLine5 BYTE "           \____|\__,_|_| |_| |_|\___|_|  |_|\___/ \__,_|\___|", 0
 
-
     nameTitle BYTE "           _   _                     ",  0
-    nameLine2 BYTE "          | \ | | __ _ _ __ ___   ___", 0
+    nameLine2 BYTE "          | \ | | __ _ _ __ ___   ___",  0
     nameLine3 BYTE "          |  \| |/ _` | '_ ` _ \ / _ \", 0
     nameLine4 BYTE "          | |\  | (_| | | | | | |  __/", 0
     nameLine5 BYTE "          |_| \_|\__,_|_| |_| |_|\___|", 0
-
-
-
-                   
- 
-
-
-
-
 
     gameModePrompt BYTE "Select your game mode:", 0Dh, 0Ah, 0
     careerModeOpt  BYTE "  1. Career Mode   - Complete progressively difficult levels", 0Dh, 0Ah, 0
     timeModeOpt    BYTE "  2. Time Mode     - Pick up and deliver passengers within time limits", 0Dh, 0Ah, 0
     endlessModeOpt BYTE "  3. Endless Mode  - Play until you crash, endless passengers", 0Dh, 0Ah, 0Dh, 0Ah, 0
-    gameModePrompt2 BYTE "Enter your choice (1-3): ", 0
-    gameModeInvalid BYTE "Invalid choice! Please enter 1, 2, or 3.", 0
-    gameModeSelected BYTE "Mode selected: ", 0
+    gameModePrompt2  BYTE "Enter your choice (1-3): ",                0
+    gameModeInvalid  BYTE "Invalid choice! Please enter 1, 2, or 3.", 0
+    gameModeSelected BYTE "Mode selected: ",                          0
 
     ; Game Mode Storage
-    currentGameMode BYTE 0          ; 1=Career, 2=Time, 3=Endless
-    careerModeName  BYTE "Career Mode", 0
-    timeModeName    BYTE "Time Mode", 0
+    currentGameMode BYTE 0                 ; 1=Career, 2=Time, 3=Endless
+    careerModeName  BYTE "Career Mode",  0
+    timeModeName    BYTE "Time Mode",    0
     endlessModeName BYTE "Endless Mode", 0
     
     ; Time Mode Variables
-    timeStartMs     DWORD 0         ; Starting time in milliseconds
-    timeElapsedMs   DWORD 0         ; Elapsed time in milliseconds
-    timeLimitMs     DWORD 120000    ; Time limit in milliseconds (120 seconds = 2 minutes)
-    displaySeconds  BYTE 120        ; Display value (seconds remaining)
-    strTimeLeft     BYTE "Time: ", 0
-    endlessComingSoon BYTE "Coming Soon!", 0
-    strTimeUp       BYTE "Time's Up! You died!", 0
-    deliveredCount  BYTE 0          ; Number of passengers delivered in time mode
-    requiredDeliveries BYTE 4       ; Must deliver 4 passengers in time mode
-    timeModeActive  BYTE 0          ; Flag: 1 if in time mode, 0 otherwise
+    timeStartMs        DWORD 0                        ; Starting time in milliseconds
+    timeElapsedMs      DWORD 0                        ; Elapsed time in milliseconds
+    timeLimitMs        DWORD 120000                   ; Time limit in milliseconds (120 seconds = 2 minutes)
+    displaySeconds     BYTE 120                       ; Display value (seconds remaining)
+    strTimeLeft        BYTE "Time: ",               0
+    strTimeUp          BYTE "Time's Up! You died!", 0
+    deliveredCount     BYTE 0                         ; Number of passengers delivered in time mode
+    requiredDeliveries BYTE 4                         ; Must deliver 4 passengers in time mode
+    timeModeActive     BYTE 0                         ; Flag: 1 if in time mode, 0 otherwise
                   
     leaderboardMsg BYTE "***No LEADERBOARD Record Yet***",0Dh,0Ah
                    BYTE "NO Leaderboard record be the first one to register :)", 0
@@ -312,13 +287,12 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
 
     
     pauseMsg         BYTE "The game is paused.", 0Dh, 0Ah, 0
-    resumeMsg        BYTE "Press any key to resume, 'Q' to quit, or 'S' to save...", 0
-    quitToMenuMsg    BYTE "Returning to main menu...", 0
-    savingMsg        BYTE "Saving score to leaderboard...", 0
+    resumeMsg     BYTE "Press any key to resume, 'Q' to quit, or 'S' to save...", 0
+    quitToMenuMsg BYTE "Returning to main menu...",                               0
+    savingMsg     BYTE "Saving score to leaderboard...",                          0
     
     ; Pause state
-    isPaused         BYTE 0              ; 0 = not paused, 1 = paused
-    pauseSavedScreen BYTE 200 DUP(0)    ; To save screen state during pause
+    isPaused         BYTE 0          ; 0 = not paused, 1 = paused
 
 .code
 main PROC
@@ -500,29 +474,29 @@ start_new_game:
     call Clrscr
     
     ; Initialize score to 0 for new game
-    mov score, 0
+    mov score,            0
     ; Reset leaderboard count so we load from file fresh
     mov LeaderBoardCount, 0
     
     ; Reset timeModeActive to 0 (will be set by GameModeSelectionScreen if needed)
     ; Note: GameModeSelectionScreen already sets timeModeActive = 1 if time mode selected
     
-    call DrawWall         ;draw walls
-    call DrawScoreboard   ;draw scoreboard
+    call DrawWall       ;draw walls
+    call DrawScoreboard ;draw scoreboard
     call DrawBuildings
-    call DrawNPCs         ;draw NPC cars
+    call DrawNPCs       ;draw NPC cars
 
     ; Set speed based on taxi color
     ; 1 = Red Taxi (slow: 15ms), 2 = Yellow Taxi (fast: 5ms)
     cmp UserColourChoice, 1
-    je set_red_speed
+    je  set_red_speed
     
     ; Default to yellow (fast speed)
-    mov eax, 5              ; Yellow taxi: 5ms per move (faster)
+    mov eax, 5    ; Yellow taxi: 5ms per move (faster)
     jmp speed_set
 
 set_red_speed:
-    mov eax, 15             ; Red taxi: 15ms per move (slower)
+    mov eax, 15 ; Red taxi: 15ms per move (slower)
 
 speed_set:
     mov speed, eax
@@ -710,11 +684,6 @@ invalid_input:
     
 SelectTaxiScreen ENDP
 
-
-
-
-
-
 ; =============================================
 ; Enter Player Name - FIXED VERSION
 ; =============================================
@@ -725,37 +694,35 @@ EnterPlayer_Name PROC
 
     
    call Clrscr
-    mov dh, 1
-    mov dl, 10
+    mov  dh,  1
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET nameTitle
+    mov  edx, OFFSET nameTitle
     call WriteString
-    mov dh, 2
-    mov dl, 10
+    mov  dh,  2
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET nameLine2
+    mov  edx, OFFSET nameLine2
     call WriteString
-    mov dh, 3
-    mov dl, 10
+    mov  dh,  3
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET nameLine3
+    mov  edx, OFFSET nameLine3
     call WriteString
-    mov dh, 4
-    mov dl, 10
+    mov  dh,  4
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET nameLine4
+    mov  edx, OFFSET nameLine4
     call WriteString
-    mov dh, 5
-    mov dl, 10
+    mov  dh,  5
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET nameLine5
+    mov  edx, OFFSET nameLine5
     call WriteString
 
 
     call Crlf
     call Crlf
-
-
     mov  edx, OFFSET Car_line1
     call WriteString
     call Crlf
@@ -839,139 +806,132 @@ invalid_input:
     call WriteString
     call Crlf
     jmp  Nameinput_loop
-EnterPlayer_Name  ENDP
+EnterPlayer_Name        ENDP
 
 ; =============================================
 ; GameModeSelectionScreen - Displays game mode options
 ; =============================================
 GameModeSelectionScreen PROC
     call Clrscr
-    mov dh, 1
-    mov dl, 10
+    mov  dh,  1
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET gameModeTitle
+    mov  edx, OFFSET gameModeTitle
     call WriteString
-    mov dh, 2
-    mov dl, 10
+    mov  dh,  2
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET gameModeLine2
+    mov  edx, OFFSET gameModeLine2
     call WriteString
-    mov dh, 3
-    mov dl, 10
+    mov  dh,  3
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET gameModeLine3
+    mov  edx, OFFSET gameModeLine3
     call WriteString
-    mov dh, 4
-    mov dl, 10
+    mov  dh,  4
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET gameModeLine4
+    mov  edx, OFFSET gameModeLine4
     call WriteString
-    mov dh, 5
-    mov dl, 10
+    mov  dh,  5
+    mov  dl,  10
     call Gotoxy
-    mov edx, OFFSET gameModeLine5
+    mov  edx, OFFSET gameModeLine5
     call WriteString
     
     
-    mov dh, 9
-    mov dl, 5
+    mov  dh,  9
+    mov  dl,  5
     call Gotoxy
-    mov edx, OFFSET gameModePrompt
+    mov  edx, OFFSET gameModePrompt
     call WriteString
-    mov dh, 11
-    mov dl, 5
+    mov  dh,  11
+    mov  dl,  5
     call Gotoxy
-    mov edx, OFFSET careerModeOpt
+    mov  edx, OFFSET careerModeOpt
     call WriteString
-    mov dh, 12
-    mov dl, 5
+    mov  dh,  12
+    mov  dl,  5
     call Gotoxy
-    mov edx, OFFSET timeModeOpt
+    mov  edx, OFFSET timeModeOpt
     call WriteString
-    mov dh, 13
-    mov dl, 5
+    mov  dh,  13
+    mov  dl,  5
     call Gotoxy
-    mov edx, OFFSET endlessModeOpt
+    mov  edx, OFFSET endlessModeOpt
     call WriteString
 gameModeInputLoop:
-    mov dh, 16
-    mov dl, 5
+    mov  dh,  16
+    mov  dl,  5
     call Gotoxy
-    mov edx, OFFSET gameModePrompt2
+    mov  edx, OFFSET gameModePrompt2
     call WriteString
     call ReadChar
     call WriteChar
     call Crlf
-    cmp al, '1'
-    je  setCareerMode
-    cmp al, '2'
-    je  setTimeMode
-    cmp al, '3'
-    je  setEndlessMode
-    mov dh, 18
-    mov dl, 5
+    cmp  al,  '1'
+    je   setCareerMode
+    cmp  al,  '2'
+    je   setTimeMode
+    cmp  al,  '3'
+    je   setEndlessMode
+    mov  dh,  18
+    mov  dl,  5
     call Gotoxy
-    mov edx, OFFSET gameModeInvalid
+    mov  edx, OFFSET gameModeInvalid
     call WriteString
     call Crlf
-    jmp gameModeInputLoop
+    jmp  gameModeInputLoop
 setCareerMode:
-    mov currentGameMode, 1
-    mov timeModeActive, 0           ; Deactivate time mode for career
-    mov dh, 18
-    mov dl, 5
+    mov  currentGameMode, 1
+    mov  timeModeActive,  0                       ; Deactivate time mode for career
+    mov  dh,              18
+    mov  dl,              5
     call Gotoxy
-    mov edx, OFFSET gameModeSelected
+    mov  edx,             OFFSET gameModeSelected
     call WriteString
-    mov edx, OFFSET careerModeName
+    mov  edx,             OFFSET careerModeName
     call WriteString
     call Crlf
     call ReadChar
     ret
 setTimeMode:
-    mov currentGameMode, 2
-    mov timeModeActive, 1           ; Activate time mode
-    mov displaySeconds, 120         ; Display 120 seconds (2 minutes)
-    call GetMseconds                ; Get current system time in milliseconds
-    mov timeStartMs, eax            ; Store start time
-    mov timeElapsedMs, 0            ; Reset elapsed time
-    mov deliveredCount, 0           ; Reset delivered passenger count
-    mov dh, 18
-    mov dl, 5
+    mov  currentGameMode, 2
+    mov  timeModeActive,  1                       ; Activate time mode
+    mov  displaySeconds,  120                     ; Display 120 seconds (2 minutes)
+    call GetMseconds                              ; Get current system time in milliseconds
+    mov  timeStartMs,     eax                     ; Store start time
+    mov  timeElapsedMs,   0                       ; Reset elapsed time
+    mov  deliveredCount,  0                       ; Reset delivered passenger count
+    mov  dh,              18
+    mov  dl,              5
     call Gotoxy
-    mov edx, OFFSET gameModeSelected
+    mov  edx,             OFFSET gameModeSelected
     call WriteString
-    mov edx, OFFSET timeModeName
+    mov  edx,             OFFSET timeModeName
     call WriteString
     call Crlf
     call ReadChar
     ret
 setEndlessMode:
-    mov currentGameMode, 3
-    mov timeModeActive, 0           ; Deactivate time mode for endless
-    mov dh, 18
-    mov dl, 5
+    mov  currentGameMode, 3
+    mov  timeModeActive,  0                       ; Deactivate time mode for endless
+    mov  dh,              18
+    mov  dl,              5
     call Gotoxy
-    mov edx, OFFSET gameModeSelected
+    mov  edx,             OFFSET gameModeSelected
     call WriteString
-    mov edx, OFFSET endlessModeName
+    mov  edx,             OFFSET endlessModeName
     call WriteString
     call Crlf
     call ReadChar
     ret
 GameModeSelectionScreen ENDP
 
-
-
-
-
-
-
-
 ; =============================================
 ; LeaderboardScreen
 ; =============================================
-LeaderboardScreen PROC
+LeaderboardScreen       PROC
     mov  edx,        OFFSET highscoresFile
     call OpenInputFile
     mov  fileHandle, eax
@@ -1119,16 +1079,14 @@ CopyString PROC
     ret     ; Return to caller
 CopyString            ENDP
 
-
-
 ; =============================================
 ; Add Score to Leaderboard
 ; Input: EAX = score, EDX = player name address
 ; =============================================
 AddScoreToLeaderboard PROC
     ; Save the input parameters in registers that won't be clobbered
-    mov ebx, eax        ; Save score in EBX
-    mov esi, edx        ; Save player name address in ESI
+    mov ebx, eax ; Save score in EBX
+    mov esi, edx ; Save player name address in ESI
     
     ; Initialize LeaderBoardCount to 0 first
     mov LeaderBoardCount, 0
@@ -1139,7 +1097,7 @@ AddScoreToLeaderboard PROC
     mov  fileHandle, eax
 
     cmp fileHandle, INVALID_HANDLE_VALUE
-    je  check_board_full      ; File doesn't exist, start fresh
+    je  check_board_full                 ; File doesn't exist, start fresh
 
     ; Try to read the count
     mov  edx, OFFSET LeaderBoardCount
@@ -1149,21 +1107,21 @@ AddScoreToLeaderboard PROC
     ; Check if we successfully read a valid count
     mov ecx, LeaderBoardCount
     cmp ecx, 0
-    je  file_empty       ; No entries in file
+    je  file_empty            ; No entries in file
 
     cmp ecx, 10
-    jbe load_existing_data  ; Count is valid (1-10), load the data
+    jbe load_existing_data ; Count is valid (1-10), load the data
 
 file_empty:
     ; File exists but is empty
-    mov  eax, fileHandle
+    mov  eax,              fileHandle
     call CloseFile
-    mov LeaderBoardCount, 0
-    jmp check_board_full
+    mov  LeaderBoardCount, 0
+    jmp  check_board_full
 
 load_existing_data:
     ; Load existing scores and names
-    mov edi, 0           ; Use EDI as loop counter
+    mov edi, 0 ; Use EDI as loop counter
 load_existing_loop:
     ; Read name
     mov  eax, edi
@@ -1171,7 +1129,7 @@ load_existing_loop:
     mul  ecx
     mov  edx, OFFSET LeaderBoardNames
     add  edx, eax
-    mov  eax, fileHandle      ; Load file handle
+    mov  eax, fileHandle              ; Load file handle
     mov  ecx, 20
     call ReadFromFile
 
@@ -1181,7 +1139,7 @@ load_existing_loop:
     mul  ecx
     mov  edx, OFFSET LeaderBoardScores
     add  edx, eax
-    mov  eax, fileHandle      ; Load file handle again
+    mov  eax, fileHandle               ; Load file handle again
     mov  ecx, 4
     call ReadFromFile
 
@@ -1208,54 +1166,54 @@ check_board_full:
     jbe no_add
 
     ; Replace lowest score
-    mov  eax, 9
-    mov  ecx, 20
-    mul  ecx                          ; EAX = 9 × 20 = 180
-    mov  edi, OFFSET LeaderBoardNames
-    add  edi, eax
-    mov  edx, esi                     ; Source name (ESI contains name address)
-    mov  ecx, 20
+    mov eax, 9
+    mov ecx, 20
+    mul ecx                          ; EAX = 9 × 20 = 180
+    mov edi, OFFSET LeaderBoardNames
+    add edi, eax
+    mov edx, esi                     ; Source name (ESI contains name address)
+    mov ecx, 20
     
     ; Call CopyString: ESI = source, EDI = destination, ECX = count
     push esi
-    mov esi, edx
+    mov  esi, edx
     call CopyString
-    pop esi
+    pop  esi
     
     ; Store score
-    mov  eax, 9
-    mov  ecx, 4
-    mul  ecx
-    mov  edi, OFFSET LeaderBoardScores
-    add  edi, eax                     ; EDI = address of score[9]
-    mov  eax, ebx                     ; EAX = score (stored in ebx)
-    mov  [edi], eax                   ; Store new score
-    jmp  sort_scores
+    mov eax,   9
+    mov ecx,   4
+    mul ecx
+    mov edi,   OFFSET LeaderBoardScores
+    add edi,   eax                      ; EDI = address of score[9]
+    mov eax,   ebx                      ; EAX = score (stored in ebx)
+    mov [edi], eax                      ; Store new score
+    jmp sort_scores
 
 add_new_score:
     ; Add to end
-    mov  eax, LeaderBoardCount
-    mov  ecx, 20
-    mul  ecx
-    mov  edi, OFFSET LeaderBoardNames
-    add  edi, eax
-    mov  edx, esi                     ; Source name (ESI contains name address)
-    mov  ecx, 20
+    mov eax, LeaderBoardCount
+    mov ecx, 20
+    mul ecx
+    mov edi, OFFSET LeaderBoardNames
+    add edi, eax
+    mov edx, esi                     ; Source name (ESI contains name address)
+    mov ecx, 20
     
     ; Call CopyString: ESI = source, EDI = destination, ECX = count
     push esi
-    mov esi, edx
+    mov  esi, edx
     call CopyString
-    pop esi
+    pop  esi
     
     ; Store score
-    mov  eax, LeaderBoardCount
-    mov  ecx, 4
-    mul  ecx
-    mov  edi, OFFSET LeaderBoardScores
-    add  edi, eax
-    mov  eax, ebx                     ; EAX = score (stored in ebx)
-    mov  [edi], eax
+    mov eax,   LeaderBoardCount
+    mov ecx,   4
+    mul ecx
+    mov edi,   OFFSET LeaderBoardScores
+    add edi,   eax
+    mov eax,   ebx                      ; EAX = score (stored in ebx)
+    mov [edi], eax
     
     inc LeaderBoardCount
 
@@ -1640,24 +1598,7 @@ WaitForKey PROC
     call WriteString
     call ReadChar
     ret
-WaitForKey ENDP
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+WaitForKey   ENDP
 
 
 ; =============================================
@@ -1666,13 +1607,13 @@ WaitForKey ENDP
 ApplyPenalty PROC
     ; Check if score is already 0
     cmp score, 0
-    je no_penalty
+    je  no_penalty
     
     ; Apply penalty based on taxi color
     cmp UserColourChoice, 1
-    je red_penalty
+    je  red_penalty
     cmp UserColourChoice, 2
-    je yellow_penalty
+    je  yellow_penalty
     
     ; Default penalty: -1 point
     dec score
@@ -1681,14 +1622,14 @@ ApplyPenalty PROC
 red_penalty:
     ; Red taxi: -2 points
     cmp score, 2
-    jl no_penalty
+    jl  no_penalty
     sub score, 2
     jmp update_display
 
 yellow_penalty:
     ; Yellow taxi: -4 points
     cmp score, 4
-    jl no_penalty
+    jl  no_penalty
     sub score, 4
 
 update_display:
@@ -1698,32 +1639,27 @@ no_penalty:
     ret
 ApplyPenalty ENDP
 
-
-
-
-
-
 ; =============================================
 ; drawCar - Main Game Loop
 ; ============================================
 drawCar:
     ; Clear and regenerate boxes and trees each game
-    mov boxCount, 0
+    mov boxCount,  0
     mov treeCount, 0
     
     ; Initialize timer display for time mode
-    cmp timeModeActive, 1
-    jne skip_timer_init
-    mov dl, 95          ; Right side of screen (X position)
-    mov dh, 29          ; Bottom of screen (Y position)
-    call Gotoxy
-    mov edx, OFFSET strTimeLeft
-    call WriteString
-    movzx eax, displaySeconds
-    call WriteDec
-    mov al, ' '
-    call WriteChar
-    call WriteChar
+    cmp   timeModeActive, 1
+    jne   skip_timer_init
+    mov   dl,             95                 ; Right side of screen (X position)
+    mov   dh,             29                 ; Bottom of screen (Y position)
+    call  Gotoxy
+    mov   edx,            OFFSET strTimeLeft
+    call  WriteString
+    movzx eax,            displaySeconds
+    call  WriteDec
+    mov   al,             ' '
+    call  WriteChar
+    call  WriteChar
     
 skip_timer_init:
     mov esi, 0
@@ -1735,7 +1671,7 @@ drawCar_loop:
 
     call Randomize
     call CreateRandomCoin
-    call DrawCoin         ; set up finish
+    call DrawCoin              ; set up finish
     call GenerateBoxesAndTrees
     call DrawBoxesAndTrees
     call CreatePassengers
@@ -1747,12 +1683,12 @@ drawCar_loop:
     call Gotoxy
 
     ; Update time counter if in time mode
-    cmp timeModeActive, 1
-    jne skip_time_update
+    cmp  timeModeActive, 1
+    jne  skip_time_update
     call UpdateTimeCounter
     ; Check if time is up (displaySeconds = 0)
-    cmp displaySeconds, 0
-    je time_is_up
+    cmp  displaySeconds, 0
+    je   time_is_up
     
 skip_time_update:
 
@@ -1785,81 +1721,81 @@ skip_time_update:
 normal_key:
     ; AL contains a normal ASCII key
     cmp al, 'p'
-    je pause_game
+    je  pause_game
     cmp al, 'P'
-    je pause_game
-    cmp al, ' '             ; Spacebar for pickup/drop
-    je handle_spacebar
+    je  pause_game
+    cmp al, ' '         ; Spacebar for pickup/drop
+    je  handle_spacebar
     jmp gameLoop
 
 handle_spacebar:
     call HandlePickupDrop
-    jmp gameLoop
+    jmp  gameLoop
 
 pause_game:
     ; Pause menu at top-left corner of screen (narrower to fit terminal)
-    mov dh, 0
-    mov dl, 10
+    mov  dh,  0
+    mov  dl,  10
     call Gotoxy
-    mov al, 201         ; ╔
+    mov  al,  201  ; ╔
     call WriteChar
-    mov ecx, 35
-    mov al, 205         ; ═
+    mov  ecx, 35
+    mov  al,  205  ; ═
     clear_top:
     call WriteChar
     loop clear_top
-    mov al, 187         ; ╗
+    mov  al,  187  ; ╗
     call WriteChar
     
-    mov dh, 1
-    mov dl, 10
+    mov  dh,  1
+    mov  dl,  10
     call Gotoxy
-    mov al, 186         ; ║
+    mov  al,  186     ; ║
     call WriteChar
-    mov al, ' '
-    mov ecx, 35
+    mov  al,  ' '
+    mov  ecx, 35
     pause_space1:
     call WriteChar
     loop pause_space1
-    mov al, 186         ; ║
+    mov  al,  186     ; ║
     call WriteChar
     
-    mov dh, 1
-    mov dl, 12
+    mov  dh,  1
+    mov  dl,  12
     call Gotoxy
-    mov edx, OFFSET pauseMsg
+    mov  edx, OFFSET pauseMsg
     call WriteString
     
-    mov dh, 2
-    mov dl, 10
+    mov  dh,  2
+    mov  dl,  10
     call Gotoxy
-    mov al, 186         ; ║
+    mov  al,  186     ; ║
     call WriteChar
-    mov al, ' '
-    mov ecx, 35
+    mov  al,  ' '
+    mov  ecx, 35
     pause_space2:
     call WriteChar
     loop pause_space2
-    mov al, 186         ; ║
+    mov  al,  186     ; ║
     call WriteChar
     
-    mov dh, 2
-    mov dl, 12
+    mov  dh,  2
+    mov  dl,  12
     call Gotoxy
-    mov edx, OFFSET resumeMsg
+    mov  edx, OFFSET resumeMsg
     call WriteString
     
-    mov dh, 3
-    mov dl, 10
+    mov  dh,  3
+    mov  dl,  10
     call Gotoxy
-    mov al, 200         ; ╚
+    mov  al,  200  ; ╚
     call WriteChar
-    mov ecx, 35
-    mov al, 205         ; ═
+    mov  ecx, 35
+    mov  al,  205  ; ═
     clear_bot:
     call WriteChar
     loop clear_bot
-    mov al, 188         ; ╝
+    mov  al,  188  ; ╝
     call WriteChar
     
     ; Wait for input
@@ -1867,49 +1803,49 @@ pause_game:
     
     ; Check if save
     cmp al, 's'
-    je pause_save_score
+    je  pause_save_score
     cmp al, 'S'
-    je pause_save_score
+    je  pause_save_score
     
     ; Check if quit
     cmp al, 'q'
-    je pause_quit_to_menu
+    je  pause_quit_to_menu
     cmp al, 'Q'
-    je pause_quit_to_menu
+    je  pause_quit_to_menu
     
     ; Clear pause box lines - clear entire row from column 10-47
-    mov dh, 0
-    mov dl, 10
+    mov  dh,  0
+    mov  dl,  10
     call Gotoxy
-    mov ecx, 38          ; 10 to 47 = 38 chars
-    mov al, ' '
+    mov  ecx, 38           ; 10 to 47 = 38 chars
+    mov  al,  ' '
     clear_pause_line1:
     call WriteChar
     loop clear_pause_line1
     
-    mov dh, 1
-    mov dl, 10
+    mov  dh,  1
+    mov  dl,  10
     call Gotoxy
-    mov ecx, 38
-    mov al, ' '
+    mov  ecx, 38
+    mov  al,  ' '
     clear_pause_line2:
     call WriteChar
     loop clear_pause_line2
     
-    mov dh, 2
-    mov dl, 10
+    mov  dh,  2
+    mov  dl,  10
     call Gotoxy
-    mov ecx, 38
-    mov al, ' '
+    mov  ecx, 38
+    mov  al,  ' '
     clear_pause_line3:
     call WriteChar
     loop clear_pause_line3
     
-    mov dh, 3
-    mov dl, 10
+    mov  dh,  3
+    mov  dl,  10
     call Gotoxy
-    mov ecx, 38
-    mov al, ' '
+    mov  ecx, 38
+    mov  al,  ' '
     clear_pause_line4:
     call WriteChar
     loop clear_pause_line4
@@ -1919,207 +1855,207 @@ pause_game:
 
 pause_save_score:
     ; Clear pause box first
-    mov dh, 0
-    mov dl, 10
+    mov  dh,  0
+    mov  dl,  10
     call Gotoxy
-    mov ecx, 38
-    mov al, ' '
+    mov  ecx, 38
+    mov  al,  ' '
     clear_save_line1:
     call WriteChar
     loop clear_save_line1
     
-    mov dh, 1
-    mov dl, 10
+    mov  dh,  1
+    mov  dl,  10
     call Gotoxy
-    mov ecx, 38
-    mov al, ' '
+    mov  ecx, 38
+    mov  al,  ' '
     clear_save_line2:
     call WriteChar
     loop clear_save_line2
     
-    mov dh, 2
-    mov dl, 10
+    mov  dh,  2
+    mov  dl,  10
     call Gotoxy
-    mov ecx, 38
-    mov al, ' '
+    mov  ecx, 38
+    mov  al,  ' '
     clear_save_line3:
     call WriteChar
     loop clear_save_line3
     
-    mov dh, 3
-    mov dl, 10
+    mov  dh,  3
+    mov  dl,  10
     call Gotoxy
-    mov ecx, 38
-    mov al, ' '
+    mov  ecx, 38
+    mov  al,  ' '
     clear_save_line4:
     call WriteChar
     loop clear_save_line4
     
     ; Prepare to save score: EAX = score, EDX = player name
-    movzx eax, score              ; Get current score into EAX
-    mov   edx, OFFSET PlayerName  ; Get player name address
-    call  AddScoreToLeaderboard   ; Add score to leaderboard and save
+    movzx eax, score             ; Get current score into EAX
+    mov   edx, OFFSET PlayerName ; Get player name address
+    call  AddScoreToLeaderboard  ; Add score to leaderboard and save
     
     ; Display saving message
-    mov dh, 12
-    mov dl, 10
+    mov  dh,  12
+    mov  dl,  10
     call Gotoxy
-    mov eax, yellow + (black * 16)
+    mov  eax, yellow + (black * 16)
     call SetTextColor
-    mov edx, OFFSET savingMsg
+    mov  edx, OFFSET savingMsg
     call WriteString
     
     ; Wait a moment then return to menu
-    mov eax, 1000
+    mov  eax, 1000
     call delay
     
-    jmp pause_quit_to_menu  ; Return to menu after saving
+    jmp pause_quit_to_menu ; Return to menu after saving
     
 pause_quit_to_menu:
     ret
 
 pause_exit:
     ; process 'p' (or other future normal keys) via storing and FlushKeys
-    mov inputChar, al       ;assign variables (single-step movement)
+    mov inputChar, al  ;assign variables (single-step movement)
     cmp inputChar, "p"
-    je exitgame
+    je  exitgame
     jmp gameLoop
 
 checkBottom: 	
-    mov al, yPos[0]    ; Get current Y position
-    inc al             ; Calculate: current Y + 1 (moving down)
-    mov cl, yPosWall[3]; Get bottom wall position (27)
-    cmp al, cl         ; Compare next position with wall
-    jae noMoveDown     ; If next Y >= 27 → hit wall, stop
+    mov al, yPos[0]     ; Get current Y position
+    inc al              ; Calculate: current Y + 1 (moving down)
+    mov cl, yPosWall[3] ; Get bottom wall position (27)
+    cmp al, cl          ; Compare next position with wall
+    jae noMoveDown      ; If next Y >= 27 → hit wall, stop
     
     ; Check collision with building, box, or tree
-    mov dl, xPos[0]    ; Next X position
-    mov dh, al         ; Next Y position
+    mov  dl, xPos[0] ; Next X position
+    mov  dh, al      ; Next Y position
     call IsBuilding
-    cmp al, 1
-    je noMoveDown      ; Hit building, don't move
-    mov dl, xPos[0]
-    mov dh, [yPos]
-    inc dh             ; Next Y position
+    cmp  al, 1
+    je   noMoveDown  ; Hit building, don't move
+    mov  dl, xPos[0]
+    mov  dh, [yPos]
+    inc  dh          ; Next Y position
     call IsBox
-    cmp al, 1
-    je noMoveDown      ; Hit box, don't move
-    mov dl, xPos[0]
-    mov dh, [yPos]
-    inc dh             ; Next Y position
+    cmp  al, 1
+    je   noMoveDown  ; Hit box, don't move
+    mov  dl, xPos[0]
+    mov  dh, [yPos]
+    inc  dh          ; Next Y position
     call IsTree
-    cmp al, 1
-    je noMoveDown      ; Hit tree, don't move
+    cmp  al, 1
+    je   noMoveDown  ; Hit tree, don't move
     
-    jmp moveDown       ; All checks passed, safe to move down
+    jmp moveDown ; All checks passed, safe to move down
     
 noMoveDown:
     call ApplyPenalty
-    jmp gameLoop
+    jmp  gameLoop
 
 checkLeft: 	
-    mov al, xPos[0]    ; Get current X position
-    dec al             ; Calculate: current X - 1 (moving left)
-    mov cl, xPosWall[0]; Get left wall position (10)
-    cmp al, cl         ; Compare next position with wall
-    jle noMoveLeft     ; If next X <= 10 → hit wall, stop
+    mov al, xPos[0]     ; Get current X position
+    dec al              ; Calculate: current X - 1 (moving left)
+    mov cl, xPosWall[0] ; Get left wall position (10)
+    cmp al, cl          ; Compare next position with wall
+    jle noMoveLeft      ; If next X <= 10 → hit wall, stop
     
     ; Check collision with building, box, or tree
-    mov dl, al         ; Next X position
-    mov dh, yPos[0]    ; Current Y position
+    mov  dl, al      ; Next X position
+    mov  dh, yPos[0] ; Current Y position
     call IsBuilding
-    cmp al, 1
-    je noMoveLeft      ; Hit building, don't move
-    mov dl, [xPos]
-    dec dl             ; Next X position
-    mov dh, yPos[0]
+    cmp  al, 1
+    je   noMoveLeft  ; Hit building, don't move
+    mov  dl, [xPos]
+    dec  dl          ; Next X position
+    mov  dh, yPos[0]
     call IsBox
-    cmp al, 1
-    je noMoveLeft      ; Hit box, don't move
-    mov dl, [xPos]
-    dec dl             ; Next X position
-    mov dh, yPos[0]
+    cmp  al, 1
+    je   noMoveLeft  ; Hit box, don't move
+    mov  dl, [xPos]
+    dec  dl          ; Next X position
+    mov  dh, yPos[0]
     call IsTree
-    cmp al, 1
-    je noMoveLeft      ; Hit tree, don't move
+    cmp  al, 1
+    je   noMoveLeft  ; Hit tree, don't move
     
-    jmp moveLeft       ; All checks passed, safe to move left
+    jmp moveLeft ; All checks passed, safe to move left
     
 noMoveLeft:
     call ApplyPenalty
-    jmp gameLoop
+    jmp  gameLoop
 
 
 checkRight: 	
-    mov al, xPos[0]    ; Get current X position
-    inc al             ; Calculate: current X + 1 (moving right)
-    mov cl, xPosWall[2]; Get right wall position (110)
-    cmp al, cl         ; Compare next position with wall
-    jae noMoveRight    ; If next X >= 110 → hit wall, stop
+    mov al, xPos[0]     ; Get current X position
+    inc al              ; Calculate: current X + 1 (moving right)
+    mov cl, xPosWall[2] ; Get right wall position (110)
+    cmp al, cl          ; Compare next position with wall
+    jae noMoveRight     ; If next X >= 110 → hit wall, stop
     
     ; Check collision with building, box, or tree
-    mov dl, al         ; Next X position
-    mov dh, yPos[0]    ; Current Y position
+    mov  dl, al      ; Next X position
+    mov  dh, yPos[0] ; Current Y position
     call IsBuilding
-    cmp al, 1
-    je noMoveRight     ; Hit building, don't move
-    mov dl, [xPos]
-    inc dl             ; Next X position
-    mov dh, yPos[0]
+    cmp  al, 1
+    je   noMoveRight ; Hit building, don't move
+    mov  dl, [xPos]
+    inc  dl          ; Next X position
+    mov  dh, yPos[0]
     call IsBox
-    cmp al, 1
-    je noMoveRight     ; Hit box, don't move
-    mov dl, [xPos]
-    inc dl             ; Next X position
-    mov dh, yPos[0]
+    cmp  al, 1
+    je   noMoveRight ; Hit box, don't move
+    mov  dl, [xPos]
+    inc  dl          ; Next X position
+    mov  dh, yPos[0]
     call IsTree
-    cmp al, 1
-    je noMoveRight     ; Hit tree, don't move
+    cmp  al, 1
+    je   noMoveRight ; Hit tree, don't move
     
-    jmp moveRight      ; All checks passed, safe to move right
+    jmp moveRight ; All checks passed, safe to move right
     
 noMoveRight:
     call ApplyPenalty
-    jmp gameLoop
+    jmp  gameLoop
 
 checkTop: 	
-    mov al, yPos[0]    ; Get current Y position
-    dec al             ; Calculate: current Y - 1 (moving up)
-    mov cl, yPosWall[0]; Get top wall position (5)
-    cmp al, cl         ; Compare next position with wall
-    jle noMoveUp       ; If next Y <= 5 → hit wall, stop
+    mov al, yPos[0]     ; Get current Y position
+    dec al              ; Calculate: current Y - 1 (moving up)
+    mov cl, yPosWall[0] ; Get top wall position (5)
+    cmp al, cl          ; Compare next position with wall
+    jle noMoveUp        ; If next Y <= 5 → hit wall, stop
     
     ; Check collision with building, box, or tree
-    mov dl, xPos[0]    ; Current X position
-    mov dh, al         ; Next Y position
+    mov  dl, xPos[0] ; Current X position
+    mov  dh, al      ; Next Y position
     call IsBuilding
-    cmp al, 1
-    je noMoveUp        ; Hit building, don't move
-    mov dl, xPos[0]
-    mov dh, [yPos]
-    dec dh             ; Next Y position
+    cmp  al, 1
+    je   noMoveUp    ; Hit building, don't move
+    mov  dl, xPos[0]
+    mov  dh, [yPos]
+    dec  dh          ; Next Y position
     call IsBox
-    cmp al, 1
-    je noMoveUp        ; Hit box, don't move
-    mov dl, xPos[0]
-    mov dh, [yPos]
-    dec dh             ; Next Y position
+    cmp  al, 1
+    je   noMoveUp    ; Hit box, don't move
+    mov  dl, xPos[0]
+    mov  dh, [yPos]
+    dec  dh          ; Next Y position
     call IsTree
-    cmp al, 1
-    je noMoveUp        ; Hit tree, don't move
+    cmp  al, 1
+    je   noMoveUp    ; Hit tree, don't move
     
-    jmp moveUp         ; All checks passed, safe to move up
+    jmp moveUp ; All checks passed, safe to move up
     
 noMoveUp:
     call ApplyPenalty
-    jmp gameLoop
+    jmp  gameLoop
 		
 		moveUp:		
-		mov  eax, speed     
+		mov  eax, speed
 		call delay          ; Pauses the game for the calculated time Without this delay, the car would move too fast to control 
         mov  esi, 0         ;index 0 (car)
 		call UpdatePlayer
-		dec  yPos[esi]       ; Move up (Y = Y - 1) 
+		dec  yPos[esi]      ; Move up (Y = Y - 1) 
         call DrawPlayer
         call DrawPassengers
         call DrawCoin
@@ -2133,8 +2069,8 @@ noMoveUp:
 		call      UpdatePlayer
 		inc       yPos[esi]
         call      DrawPlayer
-        call DrawPassengers
-        call DrawCoin
+        call      DrawPassengers
+        call      DrawCoin
         jmp       checkcoin
 
 
@@ -2145,8 +2081,8 @@ noMoveUp:
 		call      UpdatePlayer
 		dec       xPos[esi]
         call      DrawPlayer
-        call DrawPassengers
-        call DrawCoin
+        call      DrawPassengers
+        call      DrawCoin
         jmp       checkcoin
 
 
@@ -2157,41 +2093,39 @@ noMoveUp:
 		call       UpdatePlayer
 		inc        xPos[esi]
         call       DrawPlayer
-        call DrawPassengers
-        call DrawCoin
+        call       DrawPassengers
+        call       DrawCoin
         jmp        checkcoin
 
     ; Post-move handling (coin check only for single-head car)
     checkcoin:
-    ; Check box collision
-    ;call CheckPlayerBoxCollision
-    cmp al, 1
-    je died
     
-    ; Check tree collision  
-    ;call CheckPlayerTreeCollision
     cmp al, 1
-    je died
+    je  died
+    
+    
+    cmp al, 1
+    je  died
     
     ; Check NPC collision
-    mov dl, xPos[0]
-    mov dh, yPos[0]
+    mov  dl, xPos[0]
+    mov  dh, yPos[0]
     call CheckPlayerNPCCollision
-    cmp al, 1
-    je npc_collision
+    cmp  al, 1
+    je   npc_collision
     
     ; Check if player reached coin position
-    mov  al, xPos[0]
-    cmp  al, xCoinPos
-    jne  no_eat
-    mov  al, yPos[0]
-    cmp  al, yCoinPos
-    jne  no_eat
+    mov al, xPos[0]
+    cmp al, xCoinPos
+    jne no_eat
+    mov al, yPos[0]
+    cmp al, yCoinPos
+    jne no_eat
     
     ; Only auto-eat coin if NOT carrying a passenger
     ; (If carrying, HandlePickupDrop will handle the delivery)
-    cmp  pickedUpPassenger, 1
-    je   no_eat
+    cmp pickedUpPassenger, 1
+    je  no_eat
     
     call EatingCoin
     jmp  gameLoop
@@ -2201,12 +2135,12 @@ noMoveUp:
         
     npc_collision:
         call PenaltyHitCar
-        jmp gameLoop
+        jmp  gameLoop
 
 time_is_up:
-    mov timeModeActive, 0          ; Deactivate time mode
-    call YouDied                   ; Time ran out - player dies
-    jmp playagn                    ; Return to play again/menu
+    mov  timeModeActive, 0 ; Deactivate time mode
+    call YouDied           ; Time ran out - player dies
+    jmp  playagn           ; Return to play again/menu
 
 	died:
 	call YouDied
@@ -2309,7 +2243,7 @@ draw_bottom:
     call WriteChar
 
     ret
-DrawWall       ENDP
+DrawWall      ENDP
 
 
     
@@ -2317,63 +2251,63 @@ DrawWall       ENDP
 ; DrawBuildings - draws random building obstacles inside the game area
 ; =============================================
 DrawBuildings PROC
-    LOCAL buildingCount:BYTE      ; Number of buildings to generate
-    LOCAL buildingX:BYTE          ; Top-left X position of building
-    LOCAL buildingY:BYTE          ; Top-left Y position of building  
-    LOCAL buildingWidth:BYTE      ; Width of building in blocks
-    LOCAL buildingHeight:BYTE     ; Height of building in blocks
-    LOCAL i:BYTE                  ; Loop counter for height
-    LOCAL j:BYTE                  ; Loop counter for width
+    LOCAL buildingCount:BYTE  ; Number of buildings to generate
+    LOCAL buildingX:BYTE      ; Top-left X position of building
+    LOCAL buildingY:BYTE      ; Top-left Y position of building  
+    LOCAL buildingWidth:BYTE  ; Width of building in blocks
+    LOCAL buildingHeight:BYTE ; Height of building in blocks
+    LOCAL i:BYTE              ; Loop counter for height
+    LOCAL j:BYTE              ; Loop counter for width
     
-    mov eax, gray + (black * 16)
+    mov  eax, gray + (black * 16)
     call SetTextColor
     
     ; Initialize random seed
     call Randomize
     
     ; Generate random buildings
-    mov eax, 20  
+    mov  eax,           20
     call RandomRange
-    add al, 20
-    mov buildingCount, al
+    add  al,            20
+    mov  buildingCount, al
     
     ; Reset building counter
     mov buildingCountPlaced, 0
     
-    movzx ecx, buildingCount        ; Zero-extend byte to dword for loop counter
+    movzx ecx, buildingCount ; Zero-extend byte to dword for loop counter
 buildingLoop:
-    push ecx  ; Save loop counter since we'll use ECX for other purposes
+    push ecx ; Save loop counter since we'll use ECX for other purposes
     
     ; Generate random building position and size
     ; X position: between 11 and 100 (within walls 10-110)
-    mov eax, 80  ; 100-20 = 80 possible positions
+    mov  eax,       80 ; 100-20 = 80 possible positions
     call RandomRange
-    add al, 20   ; 20 + (0-79) = 20-99
-    mov buildingX, al
+    add  al,        20 ; 20 + (0-79) = 20-99
+    mov  buildingX, al
     
     ; Y position: between 6 and 22 (within walls 5-27)
-    mov eax, 16  ; 22-6 = 16 possible positions
+    mov  eax,       16 ; 22-6 = 16 possible positions
     call RandomRange
-    add al, 6    ; 6 + (0-15) = 6-21
-    mov buildingY, al
+    add  al,        6  ; 6 + (0-15) = 6-21
+    mov  buildingY, al
     
     ; Building width: 3-6 blocks
-    mov eax, 4   ; 0-3
+    mov  eax,           4  ; 0-3
     call RandomRange
-    add al, 3    ; 3-6 blocks wide
-    mov buildingWidth, al
+    add  al,            3  ; 3-6 blocks wide
+    mov  buildingWidth, al
     
     ; Building height: 2-4 blocks
-    mov eax, 3   ; 0-2
+    mov  eax,            3  ; 0-2
     call RandomRange
-    add al, 2    ; 2-4 blocks high
-    mov buildingHeight, al
+    add  al,             2  ; 2-4 blocks high
+    mov  buildingHeight, al
     
     ; Check if total blocks > 5
     mov al, buildingWidth
     mul buildingHeight
     cmp ax, 5
-    jg drawBuilding  ; If > 5 blocks, draw it
+    jg  drawBuilding      ; If > 5 blocks, draw it
     
     ; If too small, adjust to ensure > 5 blocks
     mov al, buildingWidth
@@ -2403,34 +2337,34 @@ drawBuilding:
 
     movzx eax, buildingCountPlaced
     imul eax, eax, 4  ; Each building uses 4 bytes: X, Y, width, height Multiply building count by 4
-    add esi, eax
+    add   esi, eax
     
-    mov al, buildingX
-    mov [esi], al      ; Store X position
-    mov al, buildingY
-    mov [esi+1], al    ; Store Y position
-    mov al, buildingWidth
-    mov [esi+2], al    ; Store width
-    mov al, buildingHeight
-    mov [esi+3], al    ; Store height
+    mov al,      buildingX
+    mov [esi],   al             ; Store X position
+    mov al,      buildingY
+    mov [esi+1], al             ; Store Y position
+    mov al,      buildingWidth
+    mov [esi+2], al             ; Store width
+    mov al,      buildingHeight
+    mov [esi+3], al             ; Store height
     
-    inc buildingCountPlaced  ; Increment building counter
+    inc buildingCountPlaced ; Increment building counter
 
     ; Draw the building
-    movzx ecx, buildingHeight       ; Set up height loop
-    mov i, 0                        ; Row counter
+    movzx ecx, buildingHeight ; Set up height loop
+    mov   i,   0              ; Row counter
 heightLoop:
-    push ecx                    
-    movzx ecx, buildingWidth          ; Set up width loop  
-    mov j, 0                          ; Column counter
+    push  ecx
+    movzx ecx, buildingWidth ; Set up width loop  
+    mov   j,   0             ; Column counter
 widthLoop:
-        push ecx          ; Saves the current value of ECX (width counter) onto the stack
+        push ecx ; Saves the current value of ECX (width counter) onto the stack
         
         ; Calculate position
-        mov dl, buildingX         ; DL = building's leftmost X coordinate
-        add dl, j                 ; DL = buildingX + current column offset
-        mov dh, buildingY         ; DH = building's topmost Y coordinate
-        add dh, i                 ;  DH = buildingY + current row offset
+        mov dl, buildingX ; DL = building's leftmost X coordinate
+        add dl, j         ; DL = buildingX + current column offset
+        mov dh, buildingY ; DH = building's topmost Y coordinate
+        add dh, i         ;  DH = buildingY + current row offset
         
         ; Check if within wall boundaries
         cmp dl, 10
@@ -2444,16 +2378,16 @@ widthLoop:
         
         ; Draw the block
         call Gotoxy
-        mov al, 178
+        mov  al, 178
         call WriteChar
         
     skipBlock:
-        pop ecx
-        inc j
+        pop  ecx
+        inc  j
         loop widthLoop
     
-    pop ecx
-    inc i
+    pop  ecx
+    inc  i
     loop heightLoop
     
     pop ecx
@@ -2461,7 +2395,7 @@ widthLoop:
     jnz buildingLoop
     
     ; Reset to default color
-    mov eax, white + (black * 16)
+    mov  eax, white + (black * 16)
     call SetTextColor
     
     ret
@@ -2475,22 +2409,22 @@ DrawBuildings ENDP
 ; Input: DL = X position, DH = Y position
 ; Returns: AL = 1 if building, AL = 0 if not building
 ; =============================================
-IsBuilding PROC
+IsBuilding    PROC
     ; Check if any buildings exist
     mov al, buildingCountPlaced
     cmp al, 0
-    je noBuilding
+    je  noBuilding
     
     ; Check each building
-    mov esi, OFFSET buildingPositions
+    mov   esi, OFFSET buildingPositions
     movzx ecx, buildingCountPlaced
     
 checkLoop:
     ; Load building data
-    mov al, [esi]        ; Building X (top-left)
-    mov ah, [esi+1]      ; Building Y (top-left)  
-    mov bl, [esi+2]      ; Building width
-    mov bh, [esi+3]      ; Building height
+    mov al, [esi]   ; Building X (top-left)
+    mov ah, [esi+1] ; Building Y (top-left)  
+    mov bl, [esi+2] ; Building width
+    mov bh, [esi+3] ; Building height
     
     ; Calculate building boundaries
     ; Left boundary = buildingX
@@ -2501,41 +2435,41 @@ checkLoop:
     ; Check if position X is within building's X range
     ; if (posX >= buildingX) AND (posX <= buildingX + width - 1)
     cmp dl, al
-    jl nextBuilding      ; posX < buildingX → not in building
+    jl  nextBuilding ; posX < buildingX → not in building
     
-    push bx              ; Save width and height
-    mov bl, al           ; Copy buildingX to BL
-    add bl, [esi+2]      ; BL = buildingX + width
-    dec bl               ; BL = buildingX + width - 1 (right boundary)
-    cmp dl, bl
-    pop bx               ; Restore width and height
-    jg nextBuilding      ; posX > right boundary → not in building
+    push bx           ; Save width and height
+    mov  bl, al       ; Copy buildingX to BL
+    add  bl, [esi+2]  ; BL = buildingX + width
+    dec  bl           ; BL = buildingX + width - 1 (right boundary)
+    cmp  dl, bl
+    pop  bx           ; Restore width and height
+    jg   nextBuilding ; posX > right boundary → not in building
     
     ; Check if position Y is within building's Y range
     ; if (posY >= buildingY) AND (posY <= buildingY + height - 1)
     cmp dh, ah
-    jl nextBuilding      ; posY < buildingY → not in building
+    jl  nextBuilding ; posY < buildingY → not in building
     
-    push bx              ; Save width and height
-    mov bl, ah           ; Copy buildingY to BL
-    add bl, [esi+3]      ; BL = buildingY + height
-    dec bl               ; BL = buildingY + height - 1 (bottom boundary)
-    cmp dh, bl
-    pop bx               ; Restore width and height
-    jg nextBuilding      ; posY > bottom boundary → not in building
+    push bx           ; Save width and height
+    mov  bl, ah       ; Copy buildingY to BL
+    add  bl, [esi+3]  ; BL = buildingY + height
+    dec  bl           ; BL = buildingY + height - 1 (bottom boundary)
+    cmp  dh, bl
+    pop  bx           ; Restore width and height
+    jg   nextBuilding ; posY > bottom boundary → not in building
     
     ; If we get here, position is inside the building!
     mov al, 1
     ret
     
 nextBuilding:
-    add esi, 4           ; Move to next building (4 bytes each)
+    add  esi, 4    ; Move to next building (4 bytes each)
     loop checkLoop
     
 noBuilding:
     mov al, 0
     ret
-IsBuilding ENDP
+IsBuilding            ENDP
 
 
 
@@ -2550,28 +2484,28 @@ generate_boxes:
     push ecx
     
     ; Generate random X position (11-109) - inside walls
-    mov eax, 98     ; 109-11 = 98 (11 to 109 inclusive)
+    mov  eax, 98     ; 109-11 = 98 (11 to 109 inclusive)
     call RandomRange
-    add al, 11
-    mov bl, al      ; BL = box X
+    add  al,  11
+    mov  bl,  al     ; BL = box X
     
     ; Generate random Y position (6-26) - inside walls  
-    mov eax, 20     ; 26-6 = 20 (6 to 26 inclusive)
+    mov  eax, 20     ; 26-6 = 20 (6 to 26 inclusive)
     call RandomRange
-    add al, 6
-    mov bh, al      ; BH = box Y
+    add  al,  6
+    mov  bh,  al     ; BH = box Y
     
     ; Store box position
-    mov esi, OFFSET boxPositions
+    mov   esi, OFFSET boxPositions
     movzx eax, boxCount
-    add esi, eax
-    add esi, eax    ; ×2 for X,Y pairs
+    add   esi, eax
+    add   esi, eax                 ; ×2 for X,Y pairs
     
-    mov [esi], bl   ; Store X
+    mov [esi],   bl ; Store X
     mov [esi+1], bh ; Store Y
     
-    inc boxCount
-    pop ecx
+    inc  boxCount
+    pop  ecx
     loop generate_boxes
     
     ; Generate 7 trees
@@ -2580,28 +2514,28 @@ generate_trees:
     push ecx
     
     ; Generate random X position (11-109) - inside walls
-    mov eax, 98     ; 109-11 = 98 (11 to 109 inclusive)
+    mov  eax, 98     ; 109-11 = 98 (11 to 109 inclusive)
     call RandomRange
-    add al, 11
-    mov bl, al      ; BL = tree X
+    add  al,  11
+    mov  bl,  al     ; BL = tree X
     
     ; Generate random Y position (6-26) - inside walls
-    mov eax, 20     ; 26-6 = 20 (6 to 26 inclusive)
+    mov  eax, 20     ; 26-6 = 20 (6 to 26 inclusive)
     call RandomRange
-    add al, 6
-    mov bh, al      ; BH = tree Y
+    add  al,  6
+    mov  bh,  al     ; BH = tree Y
     
     ; Store tree position
-    mov esi, OFFSET treePositions
+    mov   esi, OFFSET treePositions
     movzx eax, treeCount
-    add esi, eax
-    add esi, eax    ; ×2 for X,Y pairs
+    add   esi, eax
+    add   esi, eax                  ; ×2 for X,Y pairs
     
-    mov [esi], bl   ; Store X
+    mov [esi],   bl ; Store X
     mov [esi+1], bh ; Store Y
     
-    inc treeCount
-    pop ecx
+    inc  treeCount
+    pop  ecx
     loop generate_trees
     
     ret
@@ -2610,47 +2544,47 @@ GenerateBoxesAndTrees ENDP
 ; =============================================
 ; Draw boxes and trees
 ; =============================================
-DrawBoxesAndTrees PROC
+DrawBoxesAndTrees     PROC
     ; Draw boxes in gray
-    mov eax, gray + (black * 16)
+    mov  eax, gray + (black * 16)
     call SetTextColor
     
-    mov esi, OFFSET boxPositions
+    mov   esi, OFFSET boxPositions
     movzx ecx, boxCount
-    cmp ecx, 0
-    je draw_trees
+    cmp   ecx, 0
+    je    draw_trees
     
 draw_boxes:
-    mov dl, [esi]   ; X position
-    mov dh, [esi+1] ; Y position
+    mov  dl,  [esi]   ; X position
+    mov  dh,  [esi+1] ; Y position
     call Gotoxy
-    mov al, boxChar
+    mov  al,  boxChar
     call WriteChar
-    add esi, 2
+    add  esi, 2
     loop draw_boxes
 
 draw_trees:
     ; Draw trees in green
-    mov eax, green + (black * 16)
+    mov  eax, green + (black * 16)
     call SetTextColor
     
-    mov esi, OFFSET treePositions
+    mov   esi, OFFSET treePositions
     movzx ecx, treeCount
-    cmp ecx, 0
-    je done_drawing
+    cmp   ecx, 0
+    je    done_drawing
     
 draw_trees_loop:
-    mov dl, [esi]   ; X position
-    mov dh, [esi+1] ; Y position
+    mov  dl,  [esi]      ; X position
+    mov  dh,  [esi+1]    ; Y position
     call Gotoxy
-    mov al, treeChar
+    mov  al,  treeChar
     call WriteChar
-    add esi, 2
+    add  esi, 2
     loop draw_trees_loop
 
 done_drawing:
     ; Reset to default color
-    mov eax, white + (black * 16)
+    mov  eax, white + (black * 16)
     call SetTextColor
     ret
 DrawBoxesAndTrees ENDP
@@ -2660,56 +2594,56 @@ DrawBoxesAndTrees ENDP
 ; =============================================
 ; CreatePassengers - creates 5 passenger positions with retry logic
 ; =============================================
-CreatePassengers PROC
+CreatePassengers  PROC
     mov passengerCount, 0
-    mov ecx, 5              ; Create 5 passengers
+    mov ecx,            5 ; Create 5 passengers
 
 create_passenger_loop:
-    push ecx                ; Save outer loop counter
-    mov  edi, 0             ; Retry counter
+    push ecx    ; Save outer loop counter
+    mov  edi, 0 ; Retry counter
 
 try_generate:
-    inc  edi
-    cmp  edi, 50            ; Max 50 attempts per passenger
-    jg   force_position     ; If too many failures, force a position
+    inc edi
+    cmp edi, 50        ; Max 50 attempts per passenger
+    jg  force_position ; If too many failures, force a position
 
     ; Generate random position
     call GenerateValidPosition
-    jc   try_generate       ; If carry set, position invalid - try again
+    jc   try_generate          ; If carry set, position invalid - try again
 
     ; Position is valid - store it
-    mov  esi, OFFSET passengerPositions
+    mov   esi, OFFSET passengerPositions
     movzx eax, passengerCount
-    shl  eax, 1             ; Multiply by 2 (X,Y pairs)
-    add  esi, eax
+    shl   eax, 1                         ; Multiply by 2 (X,Y pairs)
+    add   esi, eax
     
-    mov  [esi], bl          ; Store X
-    mov  [esi+1], bh        ; Store Y
-    inc  passengerCount
+    mov [esi],   bl    ; Store X
+    mov [esi+1], bh    ; Store Y
+    inc passengerCount
     
-    pop  ecx
-    dec  ecx
-    jnz  create_passenger_loop
+    pop ecx
+    dec ecx
+    jnz create_passenger_loop
     ret
 
 force_position:
     ; Force a position after too many failed attempts
-    call GenerateForcedPosition
-    mov  esi, OFFSET passengerPositions
+    call  GenerateForcedPosition
+    mov   esi, OFFSET passengerPositions
     movzx eax, passengerCount
-    shl  eax, 1
-    add  esi, eax
+    shl   eax, 1
+    add   esi, eax
     
-    mov  [esi], bl
-    mov  [esi+1], bh
-    inc  passengerCount
+    mov [esi],   bl
+    mov [esi+1], bh
+    inc passengerCount
     
-    pop  ecx
-    dec  ecx
-    jnz  create_passenger_loop
+    pop ecx
+    dec ecx
+    jnz create_passenger_loop
     ret
 
-CreatePassengers ENDP
+CreatePassengers      ENDP
 
 ; =============================================
 ; GenerateValidPosition - generates a valid position for passenger
@@ -2717,37 +2651,37 @@ CreatePassengers ENDP
 ; =============================================
 GenerateValidPosition PROC
     ; Generate X between 11-109
-    mov eax, 99             ; 109-11+1 = 99
+    mov  eax, 99     ; 109-11+1 = 99
     call RandomRange
-    add al, 11
-    mov bl, al
+    add  al,  11
+    mov  bl,  al
 
     ; Generate Y between 6-26
-    mov eax, 21             ; 26-6+1 = 21
+    mov  eax, 21     ; 26-6+1 = 21
     call RandomRange
-    add al, 6
-    mov bh, al
+    add  al,  6
+    mov  bh,  al
 
     ; Check building collision
-    mov dl, bl
-    mov dh, bh
+    mov  dl, bl
+    mov  dh, bh
     call IsBuilding
-    cmp al, 1
-    je  invalid_position
+    cmp  al, 1
+    je   invalid_position
 
     ; Check box collision
-    mov dl, bl
-    mov dh, bh
+    mov  dl, bl
+    mov  dh, bh
     call IsBox
-    cmp al, 1
-    je  invalid_position
+    cmp  al, 1
+    je   invalid_position
 
     ; Check tree collision
-    mov dl, bl
-    mov dh, bh
+    mov  dl, bl
+    mov  dh, bh
     call IsTree
-    cmp al, 1
-    je  invalid_position
+    cmp  al, 1
+    je   invalid_position
 
     ; Check coin collision
     mov al, bl
@@ -2768,10 +2702,10 @@ check_player_collision:
 
 check_existing_passengers:
     ; Check if position overlaps with existing passengers
-    mov esi, OFFSET passengerPositions
+    mov   esi, OFFSET passengerPositions
     movzx ecx, passengerCount
-    cmp ecx, 0
-    je  valid_position
+    cmp   ecx, 0
+    je    valid_position
     
 check_passenger_loop:
     mov al, [esi]
@@ -2782,17 +2716,17 @@ check_passenger_loop:
     je  invalid_position
     
 next_passenger_check:
-    add esi, 2
+    add  esi, 2
     loop check_passenger_loop
 
 valid_position:
-    clc                     ; Clear carry flag = valid
+    clc ; Clear carry flag = valid
     ret
 
 invalid_position:
-    stc                     ; Set carry flag = invalid
+    stc ; Set carry flag = invalid
     ret
-GenerateValidPosition ENDP
+GenerateValidPosition  ENDP
 
 
 ; =============================================
@@ -2806,35 +2740,35 @@ GenerateForcedPosition PROC
     ; These positions are spread out across the playable area
     
     movzx ecx, passengerCount
-    cmp ecx, 0
-    jne passenger_1
+    cmp   ecx, 0
+    jne   passenger_1
     ; Position 0: top-left area (X=25, Y=10)
-    mov bl, 25
-    mov bh, 10
+    mov   bl,  25
+    mov   bh,  10
     ret
     
 passenger_1:
     cmp ecx, 1
     jne passenger_2
     ; Position 1: top-right area (X=95, Y=10)
-    mov bl, 95
-    mov bh, 10
+    mov bl,  95
+    mov bh,  10
     ret
     
 passenger_2:
     cmp ecx, 2
     jne passenger_3
     ; Position 2: center area (X=60, Y=16)
-    mov bl, 60
-    mov bh, 16
+    mov bl,  60
+    mov bh,  16
     ret
     
 passenger_3:
     cmp ecx, 3
     jne passenger_4
     ; Position 3: bottom-left area (X=25, Y=22)
-    mov bl, 25
-    mov bh, 22
+    mov bl,  25
+    mov bh,  22
     ret
     
 passenger_4:
@@ -2847,19 +2781,19 @@ GenerateForcedPosition ENDP
 ; =============================================
 ; DrawPassengers - draws waiting passengers only (picked up and delivered ones are hidden)
 ; =============================================
-DrawPassengers PROC
+DrawPassengers         PROC
     ; Check if any passengers exist
     mov al, passengerCount
     cmp al, 0
-    je done_drawing_passengers
+    je  done_drawing_passengers
     
     ; Set color for passengers (magenta)
-    mov eax, magenta + (black * 16)
+    mov  eax, magenta + (black * 16)
     call SetTextColor
     
     ; Draw only waiting passengers (state 0)
-    mov esi, OFFSET passengerPositions
-    mov edi, OFFSET passengerStates
+    mov   esi, OFFSET passengerPositions
+    mov   edi, OFFSET passengerStates
     movzx ecx, passengerCount
     
 draw_passengers_loop:
@@ -2869,20 +2803,20 @@ draw_passengers_loop:
     jne skip_passenger_draw
     
     ; Draw waiting passenger
-    mov dl, [esi]   ; X position
-    mov dh, [esi+1] ; Y position
+    mov  dl, [esi]         ; X position
+    mov  dh, [esi+1]       ; Y position
     call Gotoxy
-    mov al, passengerChar ; 'P'
+    mov  al, passengerChar ; 'P'
     call WriteChar
 
 skip_passenger_draw:
-    add esi, 2
-    inc edi
+    add  esi, 2
+    inc  edi
     loop draw_passengers_loop
 
 done_drawing_passengers:
     ; Reset to default color
-    mov eax, white + (black * 16)
+    mov  eax, white + (black * 16)
     call SetTextColor
     ret
 DrawPassengers ENDP
@@ -2901,23 +2835,23 @@ DrawPassengers ENDP
 ; Input: DL = X position, DH = Y position
 ; Returns: AL = 1 if box, AL = 0 if not box
 ; =============================================
-IsBox PROC
+IsBox          PROC
     ; Check if any boxes exist
     mov al, boxCount
     cmp al, 0
-    je noBox
+    je  noBox
     
     ; Check each box
-    mov esi, OFFSET boxPositions
+    mov   esi, OFFSET boxPositions
     movzx ecx, boxCount
     
 checkBoxLoop:
-    mov al, [esi]       ; Box X
-    mov ah, [esi+1]     ; Box Y
+    mov al, [esi]   ; Box X
+    mov ah, [esi+1] ; Box Y
     
-    cmp dl, al          ; Compare X position
+    cmp dl, al  ; Compare X position
     jne nextBox
-    cmp dh, ah          ; Compare Y position
+    cmp dh, ah  ; Compare Y position
     jne nextBox
     
     ; Position matches box
@@ -2925,13 +2859,13 @@ checkBoxLoop:
     ret
     
 nextBox:
-    add esi, 2
+    add  esi, 2
     loop checkBoxLoop
     
 noBox:
     mov al, 0
     ret
-IsBox ENDP
+IsBox  ENDP
 
 ; =============================================
 ; IsTree - checks if a position contains a tree
@@ -2942,19 +2876,19 @@ IsTree PROC
     ; Check if any trees exist
     mov al, treeCount
     cmp al, 0
-    je noTree
+    je  noTree
     
     ; Check each tree
-    mov esi, OFFSET treePositions
+    mov   esi, OFFSET treePositions
     movzx ecx, treeCount
     
 checkTreeLoop:
-    mov al, [esi]       ; Tree X
-    mov ah, [esi+1]     ; Tree Y
+    mov al, [esi]   ; Tree X
+    mov ah, [esi+1] ; Tree Y
     
-    cmp dl, al          ; Compare X position
+    cmp dl, al   ; Compare X position
     jne nextTree
-    cmp dh, ah          ; Compare Y position
+    cmp dh, ah   ; Compare Y position
     jne nextTree
     
     ; Position matches tree
@@ -2962,13 +2896,13 @@ checkTreeLoop:
     ret
     
 nextTree:
-    add esi, 2
+    add  esi, 2
     loop checkTreeLoop
     
 noTree:
     mov al, 0
     ret
-IsTree ENDP
+IsTree      ENDP
 
 ; =============================================
 ; IsPassenger - Check if waiting passenger at position (DL, DH)
@@ -2979,11 +2913,11 @@ IsPassenger PROC
     ; Check if any passengers exist
     mov al, passengerCount
     cmp al, 0
-    je noPassenger
+    je  noPassenger
     
     ; Check each passenger
-    mov esi, OFFSET passengerPositions
-    mov edi, OFFSET passengerStates
+    mov   esi, OFFSET passengerPositions
+    mov   edi, OFFSET passengerStates
     movzx ecx, passengerCount
     
 checkPassengerLoop:
@@ -2992,12 +2926,12 @@ checkPassengerLoop:
     cmp al, 0
     jne nextPassenger
     
-    mov al, [esi]       ; Passenger X
-    mov ah, [esi+1]     ; Passenger Y
+    mov al, [esi]   ; Passenger X
+    mov ah, [esi+1] ; Passenger Y
     
-    cmp dl, al          ; Compare X position
+    cmp dl, al        ; Compare X position
     jne nextPassenger
-    cmp dh, ah          ; Compare Y position
+    cmp dh, ah        ; Compare Y position
     jne nextPassenger
     
     ; Position matches passenger
@@ -3005,14 +2939,14 @@ checkPassengerLoop:
     ret
     
 nextPassenger:
-    add esi, 2
-    inc edi
+    add  esi, 2
+    inc  edi
     loop checkPassengerLoop
     
 noPassenger:
     mov al, 0
     ret
-IsPassenger ENDP
+IsPassenger             ENDP
 
 ; =============================================
 ; CheckPlayerNPCCollision - Check if player collides with any NPC
@@ -3024,21 +2958,21 @@ CheckPlayerNPCCollision PROC
     cmp dl, npc1X
     jne check_npc2_collision
     cmp dh, npc1Y
-    je npc_collision_found
+    je  npc_collision_found
     
 check_npc2_collision:
     ; Check NPC2
     cmp dl, npc2X
     jne check_npc3_collision
     cmp dh, npc2Y
-    je npc_collision_found
+    je  npc_collision_found
     
 check_npc3_collision:
     ; Check NPC3
     cmp dl, npc3X
     jne no_npc_collision
     cmp dh, npc3Y
-    je npc_collision_found
+    je  npc_collision_found
     
 no_npc_collision:
     mov al, 0
@@ -3159,7 +3093,7 @@ CheckPlayerNPCCollision ENDP
 ; =============================================
 ; DrawScoreboard - draws the scoreboard
 ; =============================================
-DrawScoreboard PROC
+DrawScoreboard          PROC
 	mov  dl,  2
 	mov  dh,  1
 	call Gotoxy
@@ -3167,76 +3101,76 @@ DrawScoreboard PROC
 	call WriteString
 	
 	; Clear old score area (3 spaces for any previous value)
-	mov al, ' '
+	mov  al, ' '
 	call WriteChar
 	call WriteChar
 	call WriteChar
 	
 	; Reposition cursor to display score
-	mov  dl,  17
-	mov  dh,  1
+	mov  dl, 17
+	mov  dh, 1
 	call Gotoxy
 	
 	; Display score value
-	movzx eax, score        ; Load current score (0-255)
-	call WriteInt           ; Display as integer
+	movzx eax, score ; Load current score (0-255)
+	call  WriteInt   ; Display as integer
 	
 	; Display passenger status
-	mov  dl,  2
-	mov  dh,  2
+	mov  dl, 2
+	mov  dh, 2
 	call Gotoxy
 	
 	; Show current passenger being carried
-	mov  al, pickedUpPassenger
-	cmp  al, 1
-	jne  not_carrying
+	mov al, pickedUpPassenger
+	cmp al, 1
+	jne not_carrying
 	
 	mov  edx, OFFSET strCarrying
 	call WriteString
 	
 	; Show which passenger index
 	movzx eax, currentPassenger
-	call WriteInt
-	jmp  passenger_display_done
+	call  WriteInt
+	jmp   passenger_display_done
 	
 not_carrying:
 	mov  edx, OFFSET strWaiting
 	call WriteString
 	
 	; Show how many passengers left
-	mov  ecx, 0
-	mov  esi, OFFSET passengerStates
-	mov  ebx, 5
+	mov ecx, 0
+	mov esi, OFFSET passengerStates
+	mov ebx, 5
 count_waiting:
-	mov  al, [esi]
-	cmp  al, 0
-	jne  skip_count
-	inc  ecx
+	mov al, [esi]
+	cmp al, 0
+	jne skip_count
+	inc ecx
 skip_count:
-	inc  esi
-	dec  ebx
-	jnz  count_waiting
+	inc esi
+	dec ebx
+	jnz count_waiting
 	
 	movzx eax, cl
-	call WriteInt
+	call  WriteInt
 	
 passenger_display_done:
 	ret
-DrawScoreboard ENDP
+DrawScoreboard    ENDP
 
 ; =============================================
 ; UpdateTimeCounter - Uses system time for accurate timer
 ; =============================================
 UpdateTimeCounter PROC
     ; Get current time in milliseconds
-    call GetMseconds                ; Returns time in EAX
+    call GetMseconds ; Returns time in EAX
     
     ; Calculate elapsed time: current - start
-    sub eax, timeStartMs
+    sub eax,           timeStartMs
     mov timeElapsedMs, eax
     
     ; Calculate remaining time: 120000ms - elapsed
-    mov eax, 120000                 ; 2 minutes in milliseconds
+    mov eax, 120000        ; 2 minutes in milliseconds
     sub eax, timeElapsedMs
     
     ; If time is up or negative, set to 0
@@ -3248,24 +3182,24 @@ time_valid:
     ; Convert milliseconds to seconds (divide by 1000)
     mov ebx, 1000
     xor edx, edx
-    div ebx                         ; EAX = seconds, EDX = remainder
+    div ebx       ; EAX = seconds, EDX = remainder
     
     ; Store the display seconds
     mov displaySeconds, al
     
     ; Display the updated timer on screen (right bottom corner)
-    mov dl, 95          ; Right side of screen (X position)
-    mov dh, 29          ; Bottom of screen (Y position)
+    mov  dl,  95                 ; Right side of screen (X position)
+    mov  dh,  29                 ; Bottom of screen (Y position)
     call Gotoxy
-    mov edx, OFFSET strTimeLeft
+    mov  edx, OFFSET strTimeLeft
     call WriteString
     
     ; Display time value
     movzx eax, displaySeconds
-    call WriteDec
+    call  WriteDec
     
     ; Clear any leftover digits by writing spaces
-    mov al, ' '
+    mov  al, ' '
     call WriteChar
     call WriteChar
     call WriteChar
@@ -3276,7 +3210,7 @@ UpdateTimeCounter ENDP
 ; =============================================
 ; DrawPlayer    esi = index of player to draw
 ; =============================================
-DrawPlayer     PROC ; draw player (taxi) at (xPos,yPos) in yellow
+DrawPlayer        PROC ; draw player (taxi) at (xPos,yPos) in yellow
     call SetDynamicColor_WRY
 
     mov  dl, xPos[esi]
@@ -3309,63 +3243,63 @@ UpdatePlayer ENDP
 ; =============================================
 ; DrawNPCs - Draw all 3 NPC cars
 ; =============================================
-DrawNPCs PROC
+DrawNPCs     PROC
     ; Draw NPC1
-    mov eax, magenta + (black * 16)
+    mov  eax, magenta + (black * 16)
     call SetTextColor
-    mov dl, npc1X
-    mov dh, npc1Y
+    mov  dl,  npc1X
+    mov  dh,  npc1Y
     call Gotoxy
-    mov al, npcChar
+    mov  al,  npcChar
     call WriteChar
     
     ; Draw NPC2
-    mov eax, brown + (black * 16)
+    mov  eax, brown + (black * 16)
     call SetTextColor
-    mov dl, npc2X
-    mov dh, npc2Y
+    mov  dl,  npc2X
+    mov  dh,  npc2Y
     call Gotoxy
-    mov al, npcChar
+    mov  al,  npcChar
     call WriteChar
     
     ; Draw NPC3
-    mov eax, cyan + (black * 16)
+    mov  eax, cyan + (black * 16)
     call SetTextColor
-    mov dl, npc3X
-    mov dh, npc3Y
+    mov  dl,  npc3X
+    mov  dh,  npc3Y
     call Gotoxy
-    mov al, npcChar
+    mov  al,  npcChar
     call WriteChar
     
     ; Restore white color
-    mov eax, white + (black * 16)
+    mov  eax, white + (black * 16)
     call SetTextColor
     ret
-DrawNPCs ENDP
+DrawNPCs  ENDP
 
 ; =============================================
 ; EraseNPCs - Erase all 3 NPC cars
 ; =============================================
 EraseNPCs PROC
     ; Erase NPC1
-    mov dl, npc1X
-    mov dh, npc1Y
+    mov  dl, npc1X
+    mov  dh, npc1Y
     call Gotoxy
-    mov al, ' '
+    mov  al, ' '
     call WriteChar
     
     ; Erase NPC2
-    mov dl, npc2X
-    mov dh, npc2Y
+    mov  dl, npc2X
+    mov  dh, npc2Y
     call Gotoxy
-    mov al, ' '
+    mov  al, ' '
     call WriteChar
     
     ; Erase NPC3
-    mov dl, npc3X
-    mov dh, npc3Y
+    mov  dl, npc3X
+    mov  dh, npc3Y
     call Gotoxy
-    mov al, ' '
+    mov  al, ' '
     call WriteChar
     ret
 EraseNPCs ENDP
@@ -3373,7 +3307,7 @@ EraseNPCs ENDP
 ; =============================================
 ; MoveNPCs - Move all 3 NPC cars
 ; =============================================
-MoveNPCs PROC
+MoveNPCs  PROC
     ; Move NPC1
     call MoveNPC1
     
@@ -3383,7 +3317,7 @@ MoveNPCs PROC
     ; Move NPC3
     call MoveNPC3
     ret
-MoveNPCs ENDP
+MoveNPCs                    ENDP
 
 ; =============================================
 ; Helper Procedures - Check if passenger at position
@@ -3397,30 +3331,30 @@ CheckNPC1PassengerAtNextPos PROC
     mov edi, OFFSET passengerStates
     
 check_npc1_next_loop:
-    mov al, [edi]               ; Check passenger state
-    cmp al, 0                   ; Only check waiting passengers
+    mov al, [edi]      ; Check passenger state
+    cmp al, 0          ; Only check waiting passengers
     jne skip_npc1_next
     
-    mov al, [esi]               ; Passenger X
+    mov al, [esi]      ; Passenger X
     mov bl, npc1X
-    inc bl                      ; NPC1's next X position
+    inc bl             ; NPC1's next X position
     cmp al, bl
     jne skip_npc1_next
     
-    mov al, [esi+1]             ; Passenger Y
+    mov al, [esi+1]          ; Passenger Y
     cmp al, npc1Y
-    je passenger_found_npc1     ; Found collision!
+    je  passenger_found_npc1 ; Found collision!
     
 skip_npc1_next:
-    add esi, 2
-    inc edi
+    add  esi, 2
+    inc  edi
     loop check_npc1_next_loop
     
-    mov al, 0                   ; No passenger found
+    mov al, 0 ; No passenger found
     ret
     
 passenger_found_npc1:
-    mov al, 1                   ; Passenger found
+    mov al, 1 ; Passenger found
     ret
 CheckNPC1PassengerAtNextPos ENDP
 
@@ -3437,17 +3371,17 @@ check_npc1_prev_loop:
     
     mov al, [esi]
     mov bl, npc1X
-    dec bl                      ; NPC1's previous X position
+    dec bl             ; NPC1's previous X position
     cmp al, bl
     jne skip_npc1_prev
     
     mov al, [esi+1]
     cmp al, npc1Y
-    je passenger_found_npc1_prev
+    je  passenger_found_npc1_prev
     
 skip_npc1_prev:
-    add esi, 2
-    inc edi
+    add  esi, 2
+    inc  edi
     loop check_npc1_prev_loop
     
     mov al, 0
@@ -3475,13 +3409,13 @@ check_npc2_next_loop:
     
     mov al, [esi+1]
     mov bl, npc2Y
-    inc bl                      ; NPC2's next Y position
+    inc bl                   ; NPC2's next Y position
     cmp al, bl
-    je passenger_found_npc2
+    je  passenger_found_npc2
     
 skip_npc2_next:
-    add esi, 2
-    inc edi
+    add  esi, 2
+    inc  edi
     loop check_npc2_next_loop
     
     mov al, 0
@@ -3509,13 +3443,13 @@ check_npc2_prev_loop:
     
     mov al, [esi+1]
     mov bl, npc2Y
-    dec bl                      ; NPC2's previous Y position
+    dec bl                        ; NPC2's previous Y position
     cmp al, bl
-    je passenger_found_npc2_prev
+    je  passenger_found_npc2_prev
     
 skip_npc2_prev:
-    add esi, 2
-    inc edi
+    add  esi, 2
+    inc  edi
     loop check_npc2_prev_loop
     
     mov al, 0
@@ -3539,17 +3473,17 @@ check_npc3_next_loop:
     
     mov al, [esi]
     mov bl, npc3X
-    dec bl                      ; NPC3's next X position (moving left)
+    dec bl             ; NPC3's next X position (moving left)
     cmp al, bl
     jne skip_npc3_next
     
     mov al, [esi+1]
     cmp al, npc3Y
-    je passenger_found_npc3
+    je  passenger_found_npc3
     
 skip_npc3_next:
-    add esi, 2
-    inc edi
+    add  esi, 2
+    inc  edi
     loop check_npc3_next_loop
     
     mov al, 0
@@ -3573,17 +3507,17 @@ check_npc3_prev_loop:
     
     mov al, [esi]
     mov bl, npc3X
-    inc bl                      ; NPC3's previous X position (moving right)
+    inc bl             ; NPC3's previous X position (moving right)
     cmp al, bl
     jne skip_npc3_prev
     
     mov al, [esi+1]
     cmp al, npc3Y
-    je passenger_found_npc3_prev
+    je  passenger_found_npc3_prev
     
 skip_npc3_prev:
-    add esi, 2
-    inc edi
+    add  esi, 2
+    inc  edi
     loop check_npc3_prev_loop
     
     mov al, 0
@@ -3599,17 +3533,17 @@ CheckNPC3PassengerAtPrevPos ENDP
 ; Moves right 15 steps, then left 15 steps, repeat
 ; Speed: moves every 4 game loop cycles
 ; =============================================
-MoveNPC1 PROC
+MoveNPC1                    PROC
     ; Increment speed counter
     inc npc1MoveCounter
     cmp npc1MoveCounter, 220
-    jne npc1_skip_move          ; Only move every 4 cycles
-    mov npc1MoveCounter, 0      ; Reset counter
+    jne npc1_skip_move       ; Only move every 4 cycles
+    mov npc1MoveCounter, 0   ; Reset counter
     
     ; Check move mode - NPC1 moves horizontally
     cmp npc1Direction, 1
-    je npc1_move_away           ; Moving away from start (right)
-    jmp npc1_move_back          ; Moving back to start (left)
+    je  npc1_move_away   ; Moving away from start (right)
+    jmp npc1_move_back   ; Moving back to start (left)
 
 npc1_move_away:
     ; Check if reached 15 steps away
@@ -3619,35 +3553,35 @@ npc1_move_away:
     ; Check if can move right (respect walls and obstacles)
     mov al, npc1X
     inc al
-    cmp al, 105                 ; Right boundary check (110 - 5 buffer)
+    cmp al, 105        ; Right boundary check (110 - 5 buffer)
     jge npc1_turn_back
     
     ; Check for obstacles (building, box, tree)
-    mov dl, al
-    mov dh, npc1Y
+    mov  dl, al
+    mov  dh, npc1Y
     call IsBuilding
-    cmp al, 1
-    je npc1_turn_back
-    mov dl, npc1X
-    inc dl
-    mov dh, npc1Y
+    cmp  al, 1
+    je   npc1_turn_back
+    mov  dl, npc1X
+    inc  dl
+    mov  dh, npc1Y
     call IsBox
-    cmp al, 1
-    je npc1_turn_back
-    mov dl, npc1X
-    inc dl
-    mov dh, npc1Y
+    cmp  al, 1
+    je   npc1_turn_back
+    mov  dl, npc1X
+    inc  dl
+    mov  dh, npc1Y
     call IsTree
-    cmp al, 1
-    je npc1_turn_back
+    cmp  al, 1
+    je   npc1_turn_back
     
     ; Check for passenger collision BEFORE moving
-    mov dl, npc1X
-    inc dl
-    mov dh, npc1Y
+    mov  dl, npc1X
+    inc  dl
+    mov  dh, npc1Y
     call IsPassenger
-    cmp al, 1
-    je npc1_turn_back           ; If passenger ahead, turn back
+    cmp  al, 1
+    je   npc1_turn_back ; If passenger ahead, turn back
     
     ; Move right
     inc npc1X
@@ -3655,8 +3589,8 @@ npc1_move_away:
     ret
 
 npc1_turn_back:
-    mov npc1Direction, 0        ; Change to moving back
-    mov npc1StepCount, 0        ; Reset step counter
+    mov npc1Direction, 0 ; Change to moving back
+    mov npc1StepCount, 0 ; Reset step counter
     ret
 
 npc1_move_back:
@@ -3667,35 +3601,35 @@ npc1_move_back:
     ; Check if can move left
     mov al, npc1X
     dec al
-    cmp al, 15                  ; Left boundary check (10 + 5 buffer)
+    cmp al, 15            ; Left boundary check (10 + 5 buffer)
     jle npc1_turn_forward
     
     ; Check for obstacles
-    mov dl, al
-    mov dh, npc1Y
+    mov  dl, al
+    mov  dh, npc1Y
     call IsBuilding
-    cmp al, 1
-    je npc1_turn_forward
-    mov dl, npc1X
-    dec dl
-    mov dh, npc1Y
+    cmp  al, 1
+    je   npc1_turn_forward
+    mov  dl, npc1X
+    dec  dl
+    mov  dh, npc1Y
     call IsBox
-    cmp al, 1
-    je npc1_turn_forward
-    mov dl, npc1X
-    dec dl
-    mov dh, npc1Y
+    cmp  al, 1
+    je   npc1_turn_forward
+    mov  dl, npc1X
+    dec  dl
+    mov  dh, npc1Y
     call IsTree
-    cmp al, 1
-    je npc1_turn_forward
+    cmp  al, 1
+    je   npc1_turn_forward
     
     ; Check for passenger collision BEFORE moving
-    mov dl, npc1X
-    dec dl
-    mov dh, npc1Y
+    mov  dl, npc1X
+    dec  dl
+    mov  dh, npc1Y
     call IsPassenger
-    cmp al, 1
-    je npc1_turn_forward        ; If passenger ahead, turn forward
+    cmp  al, 1
+    je   npc1_turn_forward ; If passenger ahead, turn forward
     
     ; Move left
     dec npc1X
@@ -3703,8 +3637,8 @@ npc1_move_back:
     ret
 
 npc1_turn_forward:
-    mov npc1Direction, 1        ; Change to moving away
-    mov npc1StepCount, 0        ; Reset step counter
+    mov npc1Direction, 1 ; Change to moving away
+    mov npc1StepCount, 0 ; Reset step counter
     ret
 
 npc1_skip_move:
@@ -3720,13 +3654,13 @@ MoveNPC2 PROC
     ; Increment speed counter
     inc npc2MoveCounter
     cmp npc2MoveCounter, 220
-    jne npc2_skip_move          ; Only move every 5 cycles
-    mov npc2MoveCounter, 0      ; Reset counter
+    jne npc2_skip_move       ; Only move every 5 cycles
+    mov npc2MoveCounter, 0   ; Reset counter
     
     ; Check move mode - NPC2 moves vertically
     cmp npc2Direction, 1
-    je npc2_move_away           ; Moving away from start (down)
-    jmp npc2_move_back          ; Moving back to start (up)
+    je  npc2_move_away   ; Moving away from start (down)
+    jmp npc2_move_back   ; Moving back to start (up)
 
 npc2_move_away:
     ; Check if reached 15 steps away
@@ -3736,35 +3670,35 @@ npc2_move_away:
     ; Check if can move down (respect walls and obstacles)
     mov al, npc2Y
     inc al
-    cmp al, 25                  ; Bottom boundary check (27 - 2 buffer)
+    cmp al, 25         ; Bottom boundary check (27 - 2 buffer)
     jge npc2_turn_back
     
     ; Check for obstacles
-    mov dl, npc2X
-    mov dh, al
+    mov  dl, npc2X
+    mov  dh, al
     call IsBuilding
-    cmp al, 1
-    je npc2_turn_back
-    mov dl, npc2X
-    mov dh, npc2Y
-    inc dh
+    cmp  al, 1
+    je   npc2_turn_back
+    mov  dl, npc2X
+    mov  dh, npc2Y
+    inc  dh
     call IsBox
-    cmp al, 1
-    je npc2_turn_back
-    mov dl, npc2X
-    mov dh, npc2Y
-    inc dh
+    cmp  al, 1
+    je   npc2_turn_back
+    mov  dl, npc2X
+    mov  dh, npc2Y
+    inc  dh
     call IsTree
-    cmp al, 1
-    je npc2_turn_back
+    cmp  al, 1
+    je   npc2_turn_back
     
     ; Check for passenger collision BEFORE moving
-    mov dl, npc2X
-    mov dh, npc2Y
-    inc dh
+    mov  dl, npc2X
+    mov  dh, npc2Y
+    inc  dh
     call IsPassenger
-    cmp al, 1
-    je npc2_turn_back           ; If passenger ahead, turn back
+    cmp  al, 1
+    je   npc2_turn_back ; If passenger ahead, turn back
     
     ; Move down
     inc npc2Y
@@ -3772,8 +3706,8 @@ npc2_move_away:
     ret
 
 npc2_turn_back:
-    mov npc2Direction, 0        ; Change to moving back
-    mov npc2StepCount, 0        ; Reset step counter
+    mov npc2Direction, 0 ; Change to moving back
+    mov npc2StepCount, 0 ; Reset step counter
     ret
 
 npc2_move_back:
@@ -3784,35 +3718,35 @@ npc2_move_back:
     ; Check if can move up
     mov al, npc2Y
     dec al
-    cmp al, 8                   ; Top boundary check (5 + 3 buffer)
+    cmp al, 8             ; Top boundary check (5 + 3 buffer)
     jle npc2_turn_forward
     
     ; Check for obstacles
-    mov dl, npc2X
-    mov dh, al
+    mov  dl, npc2X
+    mov  dh, al
     call IsBuilding
-    cmp al, 1
-    je npc2_turn_forward
-    mov dl, npc2X
-    mov dh, npc2Y
-    dec dh
+    cmp  al, 1
+    je   npc2_turn_forward
+    mov  dl, npc2X
+    mov  dh, npc2Y
+    dec  dh
     call IsBox
-    cmp al, 1
-    je npc2_turn_forward
-    mov dl, npc2X
-    mov dh, npc2Y
-    dec dh
+    cmp  al, 1
+    je   npc2_turn_forward
+    mov  dl, npc2X
+    mov  dh, npc2Y
+    dec  dh
     call IsTree
-    cmp al, 1
-    je npc2_turn_forward
+    cmp  al, 1
+    je   npc2_turn_forward
     
     ; Check for passenger collision BEFORE moving
-    mov dl, npc2X
-    mov dh, npc2Y
-    dec dh
+    mov  dl, npc2X
+    mov  dh, npc2Y
+    dec  dh
     call IsPassenger
-    cmp al, 1
-    je npc2_turn_forward        ; If passenger ahead, turn forward
+    cmp  al, 1
+    je   npc2_turn_forward ; If passenger ahead, turn forward
     
     ; Move up
     dec npc2Y
@@ -3820,8 +3754,8 @@ npc2_move_back:
     ret
 
 npc2_turn_forward:
-    mov npc2Direction, 1        ; Change to moving away
-    mov npc2StepCount, 0        ; Reset step counter
+    mov npc2Direction, 1 ; Change to moving away
+    mov npc2StepCount, 0 ; Reset step counter
     ret
 
 npc2_skip_move:
@@ -3837,13 +3771,13 @@ MoveNPC3 PROC
     ; Increment speed counter
     inc npc3MoveCounter
     cmp npc3MoveCounter, 220
-    jne npc3_skip_move          ; Only move every 4 cycles
-    mov npc3MoveCounter, 0      ; Reset counter
+    jne npc3_skip_move       ; Only move every 4 cycles
+    mov npc3MoveCounter, 0   ; Reset counter
     
     ; Check move mode - NPC3 moves horizontally
     cmp npc3Direction, 1
-    je npc3_move_away           ; Moving away from start (left)
-    jmp npc3_move_back          ; Moving back to start (right)
+    je  npc3_move_away   ; Moving away from start (left)
+    jmp npc3_move_back   ; Moving back to start (right)
 
 npc3_move_away:
     ; Check if reached 15 steps away
@@ -3853,35 +3787,35 @@ npc3_move_away:
     ; Check if can move left (respect walls and obstacles)
     mov al, npc3X
     dec al
-    cmp al, 15                  ; Left boundary check
+    cmp al, 15         ; Left boundary check
     jle npc3_turn_back
     
     ; Check for obstacles
-    mov dl, al
-    mov dh, npc3Y
+    mov  dl, al
+    mov  dh, npc3Y
     call IsBuilding
-    cmp al, 1
-    je npc3_turn_back
-    mov dl, npc3X
-    dec dl
-    mov dh, npc3Y
+    cmp  al, 1
+    je   npc3_turn_back
+    mov  dl, npc3X
+    dec  dl
+    mov  dh, npc3Y
     call IsBox
-    cmp al, 1
-    je npc3_turn_back
-    mov dl, npc3X
-    dec dl
-    mov dh, npc3Y
+    cmp  al, 1
+    je   npc3_turn_back
+    mov  dl, npc3X
+    dec  dl
+    mov  dh, npc3Y
     call IsTree
-    cmp al, 1
-    je npc3_turn_back
+    cmp  al, 1
+    je   npc3_turn_back
     
     ; Check for passenger collision BEFORE moving
-    mov dl, npc3X
-    dec dl
-    mov dh, npc3Y
+    mov  dl, npc3X
+    dec  dl
+    mov  dh, npc3Y
     call IsPassenger
-    cmp al, 1
-    je npc3_turn_back           ; If passenger ahead, turn back
+    cmp  al, 1
+    je   npc3_turn_back ; If passenger ahead, turn back
     
     ; Move left
     dec npc3X
@@ -3889,8 +3823,8 @@ npc3_move_away:
     ret
 
 npc3_turn_back:
-    mov npc3Direction, 0        ; Change to moving back
-    mov npc3StepCount, 0        ; Reset step counter
+    mov npc3Direction, 0 ; Change to moving back
+    mov npc3StepCount, 0 ; Reset step counter
     ret
 
 npc3_move_back:
@@ -3901,35 +3835,35 @@ npc3_move_back:
     ; Check if can move right
     mov al, npc3X
     inc al
-    cmp al, 105                 ; Right boundary check
+    cmp al, 105           ; Right boundary check
     jge npc3_turn_forward
     
     ; Check for obstacles
-    mov dl, al
-    mov dh, npc3Y
+    mov  dl, al
+    mov  dh, npc3Y
     call IsBuilding
-    cmp al, 1
-    je npc3_turn_forward
-    mov dl, npc3X
-    inc dl
-    mov dh, npc3Y
+    cmp  al, 1
+    je   npc3_turn_forward
+    mov  dl, npc3X
+    inc  dl
+    mov  dh, npc3Y
     call IsBox
-    cmp al, 1
-    je npc3_turn_forward
-    mov dl, npc3X
-    inc dl
-    mov dh, npc3Y
+    cmp  al, 1
+    je   npc3_turn_forward
+    mov  dl, npc3X
+    inc  dl
+    mov  dh, npc3Y
     call IsTree
-    cmp al, 1
-    je npc3_turn_forward
+    cmp  al, 1
+    je   npc3_turn_forward
     
     ; Check for passenger collision BEFORE moving
-    mov dl, npc3X
-    inc dl
-    mov dh, npc3Y
+    mov  dl, npc3X
+    inc  dl
+    mov  dh, npc3Y
     call IsPassenger
-    cmp al, 1
-    je npc3_turn_forward        ; If passenger ahead, turn forward
+    cmp  al, 1
+    je   npc3_turn_forward ; If passenger ahead, turn forward
     
     ; Move right
     inc npc3X
@@ -3937,13 +3871,13 @@ npc3_move_back:
     ret
 
 npc3_turn_forward:
-    mov npc3Direction, 1        ; Change to moving away
-    mov npc3StepCount, 0        ; Reset step counter
+    mov npc3Direction, 1 ; Change to moving away
+    mov npc3StepCount, 0 ; Reset step counter
     ret
 
 npc3_skip_move:
     ret
-MoveNPC3 ENDP
+MoveNPC3        ENDP
 
 
 
@@ -3953,14 +3887,14 @@ MoveNPC3 ENDP
 ; GREEN color with "D" symbol
 ; =============================================
 DrawDestination PROC
-    mov eax, green + (black * 16)
+    mov  eax, green + (black * 16)
     call SetTextColor
-    mov dl, xCoinPos
-    mov dh, yCoinPos
+    mov  dl,  xCoinPos
+    mov  dh,  yCoinPos
     call Gotoxy
-    mov al, "D"             ; D for destination
+    mov  al,  "D"                  ; D for destination
     call WriteChar
-    mov eax, white + (black * 16)
+    mov  eax, white + (black * 16)
     call SetTextColor
     ret
 DrawDestination ENDP
@@ -3969,15 +3903,15 @@ DrawDestination ENDP
 ; DrawBonusPoint - draws bonus point at (xCoinPos,yCoinPos)
 ; BLUE color with "*" symbol
 ; =============================================
-DrawBonusPoint PROC
-    mov eax, blue + (blue * 16)
+DrawBonusPoint  PROC
+    mov  eax, blue + (blue * 16)
     call SetTextColor
-    mov dl, xCoinPos
-    mov dh, yCoinPos
+    mov  dl,  xCoinPos
+    mov  dh,  yCoinPos
     call Gotoxy
-    mov al, "*"             ; * for bonus point
+    mov  al,  "*"                  ; * for bonus point
     call WriteChar
-    mov eax, white + (black * 16)
+    mov  eax, white + (black * 16)
     call SetTextColor
     ret
 DrawBonusPoint ENDP
@@ -3986,10 +3920,10 @@ DrawBonusPoint ENDP
 ; DrawCoin - draws destination or bonus point based on passenger status
 ; GREEN destination when passenger picked up, BLUE bonus point otherwise
 ; =============================================
-DrawCoin PROC
+DrawCoin       PROC
     ; Check if carrying a passenger - if so, draw destination in green
     cmp pickedUpPassenger, 1
-    je draw_destination_call
+    je  draw_destination_call
     
     ; No passenger - draw bonus point in blue
     call DrawBonusPoint
@@ -3998,7 +3932,7 @@ DrawCoin PROC
 draw_destination_call:
     call DrawDestination
     ret
-DrawCoin ENDP
+DrawCoin         ENDP
 
 
 
@@ -4032,11 +3966,11 @@ CreateRandomCoin PROC ;procedure to create a random coin
 
 
 ; --- Ensure coin is not inside a building ---
-    mov   dl, xCoinPos          ; DL = coin X
-    mov   dh, yCoinPos          ; DH = coin Y
-    call  IsBuilding            ; AL = 1 if inside a building
-    cmp   al, 1
-    je    CreateRandomCoin      ; regenerate if coin is inside a building
+    mov  dl, xCoinPos     ; DL = coin X
+    mov  dh, yCoinPos     ; DH = coin Y
+    call IsBuilding       ; AL = 1 if inside a building
+    cmp  al, 1
+    je   CreateRandomCoin ; regenerate if coin is inside a building
 
 
     mov ecx, 1 ; ECX = 1 (single-segment car)
@@ -4063,14 +3997,14 @@ CreateRandomCoin ENDP
 ; =============================================
 HandlePickupDrop PROC
     cmp pickedUpPassenger, 1
-    je try_dropoff              ; If carrying, try to drop
+    je  try_dropoff          ; If carrying, try to drop
     
 try_pickup:
     ; Try to pick up a passenger at current position
     mov esi, OFFSET passengerPositions
     mov edi, OFFSET passengerStates
     mov ecx, 5
-    mov ebx, 0                  ; Passenger index
+    mov ebx, 0                         ; Passenger index
     
 check_pickup_loop:
     ; Check if passenger is waiting (state 0)
@@ -4088,15 +4022,15 @@ check_pickup_loop:
     jne next_pickup_check
     
     ; Player is at passenger - PICKUP!
-    mov [edi], BYTE ptr 1           ; Mark passenger as picked up (state 1)
-    mov currentPassenger, bl        ; Store passenger index
-    mov pickedUpPassenger, 1        ; Flag: carrying passenger
+    mov [edi],             BYTE ptr 1 ; Mark passenger as picked up (state 1)
+    mov currentPassenger,  bl         ; Store passenger index
+    mov pickedUpPassenger, 1          ; Flag: carrying passenger
     
     ; Erase passenger from screen
-    mov dl, [esi]
-    mov dh, [esi+1]
+    mov  dl, [esi]
+    mov  dh, [esi+1]
     call Gotoxy
-    mov al, ' '
+    mov  al, ' '
     call WriteChar
     
     ; Generate destination at coin position
@@ -4107,9 +4041,9 @@ check_pickup_loop:
     ret
     
 next_pickup_check:
-    add esi, 2
-    inc edi
-    inc ebx
+    add  esi, 2
+    inc  edi
+    inc  ebx
     loop check_pickup_loop
     ret
 
@@ -4126,20 +4060,20 @@ try_dropoff:
     ; Player is at destination - DROPOFF!
     mov al, currentPassenger
     cmp al, 255
-    je drop_not_at_dest
+    je  drop_not_at_dest
     
     ; Erase destination 'D' from screen
-    mov dl, xCoinPos
-    mov dh, yCoinPos
+    mov  dl, xCoinPos
+    mov  dh, yCoinPos
     call Gotoxy
-    mov al, ' '
+    mov  al, ' '
     call WriteChar
     
     ; Mark passenger as delivered (state 2)
-    movzx eax, currentPassenger
-    mov edi, OFFSET passengerStates
-    add edi, eax
-    mov [edi], BYTE ptr 2
+    movzx eax,   currentPassenger
+    mov   edi,   OFFSET passengerStates
+    add   edi,   eax
+    mov   [edi], BYTE ptr 2
     
     ; Award points
     add score, 10
@@ -4149,7 +4083,7 @@ try_dropoff:
     
     ; Clear pickup state - ready for next passenger
     mov pickedUpPassenger, 0
-    mov currentPassenger, 255
+    mov currentPassenger,  255
     
     ; If in time mode, increment delivery count
     cmp timeModeActive, 1
@@ -4159,24 +4093,24 @@ try_dropoff:
     
     ; Check if we've delivered the required number in time mode
     cmp deliveredCount, 4
-    jl check_all_passengers
+    jl  check_all_passengers
     
     ; Time mode: 4 passengers delivered - WIN!
-    mov timeModeActive, 0
+    mov  timeModeActive, 0
     call DisplayTimeModeLevelComplete
-    jmp drop_not_at_dest
+    jmp  drop_not_at_dest
     
 check_all_passengers:
     ; Check if ALL passengers are delivered (all have state 2) - for career/endless mode
     call CheckAllPassengersDelivered
-    cmp al, 1
-    jne next_passenger_ready
+    cmp  al, 1
+    jne  next_passenger_ready
     
     ; All passengers delivered - reset for next round
     call ResetAllPassengers
-    call CreatePassengers           ; Create new set of passengers
-    call DrawPassengers             ; Draw all waiting passengers
-    jmp drop_not_at_dest
+    call CreatePassengers   ; Create new set of passengers
+    call DrawPassengers     ; Draw all waiting passengers
+    jmp  drop_not_at_dest
     
 next_passenger_ready:
     ; Some passengers still waiting - redraw them
@@ -4184,7 +4118,7 @@ next_passenger_ready:
     
 drop_not_at_dest:
     ret
-HandlePickupDrop ENDP
+HandlePickupDrop            ENDP
 
 ; =============================================
 ; CheckAllPassengersDelivered - checks if all passengers are delivered
@@ -4195,10 +4129,10 @@ CheckAllPassengersDelivered PROC
     mov ecx, 5
     
 check_all_loop:
-    mov al, [esi]
-    cmp al, 2           ; Check if passenger is delivered
-    jne not_all_delivered
-    inc esi
+    mov  al, [esi]
+    cmp  al, 2             ; Check if passenger is delivered
+    jne  not_all_delivered
+    inc  esi
     loop check_all_loop
     
     ; All passengers are delivered
@@ -4213,13 +4147,13 @@ CheckAllPassengersDelivered ENDP
 ; =============================================
 ; ResetAllPassengers - resets all passengers to waiting state
 ; =============================================
-ResetAllPassengers PROC
+ResetAllPassengers          PROC
     mov esi, OFFSET passengerStates
     mov ecx, 5
     
 reset_loop:
-    mov [esi], BYTE ptr 0   ; Set state to waiting (0)
-    inc esi
+    mov  [esi], BYTE ptr 0 ; Set state to waiting (0)
+    inc  esi
     loop reset_loop
     ret
 ResetAllPassengers ENDP
@@ -4228,9 +4162,9 @@ ResetAllPassengers ENDP
 ; =============================================
 ; EatingCoin - handles when car eats bonus point (not carrying passenger)
 ; =============================================
-EatingCoin       PROC
+EatingCoin         PROC
     ; car is eating bonus coin - increase score and respawn coin
-    add score, 10
+    add  score, 10
     call CreateRandomCoin
     
     ; Redraw the new bonus point
@@ -4239,7 +4173,7 @@ EatingCoin       PROC
     ; Update scoreboard display
     call DrawScoreboard
     ret
-EatingCoin ENDP
+EatingCoin                   ENDP
 
 
 
@@ -4258,17 +4192,17 @@ DisplayTimeModeLevelComplete PROC
 	mov  edx, OFFSET strLevelComplete
 	call WriteString
 
-	mov   dl,  50
-	mov   dh,  14
-	call  Gotoxy
+	mov  dl,  50
+	mov  dh,  14
+	call Gotoxy
 	mov  edx, OFFSET str4PassengersDelivered
 	call WriteString
 
 	mov   dl,  56
 	mov   dh,  16
 	call  Gotoxy
-	mov  edx, OFFSET strYourScore
-	call WriteString
+	mov   edx, OFFSET strYourScore
+	call  WriteString
 	movzx eax, score
 	call  WriteInt
 	mov   edx, OFFSET strPoints
@@ -4305,7 +4239,7 @@ DisplayTimeModeLevelComplete ENDP
 ; =============================================
 ; YouDied - handles when player dies
 ; =============================================
-YouDied    PROC
+YouDied                      PROC
 	mov  eax, 1000
 	call delay
 	Call ClrScr
@@ -4350,7 +4284,7 @@ YouDied    PROC
 	mov  edx, OFFSET blank        ;erase previous input
 	call WriteString
 	jmp  retry                    ;let user input again
-YouDied          ENDP
+YouDied   ENDP
 
 
 
@@ -4366,53 +4300,53 @@ YouDied          ENDP
 ; Input: AL = points to add
 ; Ensures score doesn't exceed 255
 AddPoints PROC
-    movzx ecx, score        ; Load current score into ECX
-    add ecx, eax            ; Add points
-    cmp ecx, 255            ; Check if exceeds max
-    jle add_ok
-    mov score, 255          ; Cap at 255
-    jmp add_done
+    movzx ecx,   score ; Load current score into ECX
+    add   ecx,   eax   ; Add points
+    cmp   ecx,   255   ; Check if exceeds max
+    jle   add_ok
+    mov   score, 255   ; Cap at 255
+    jmp   add_done
 add_ok:
-    mov score, cl           ; Store new score
+    mov score, cl ; Store new score
 add_done:
     call DrawScoreboard
     ret
-AddPoints ENDP
+AddPoints      ENDP
 
 ; SubtractPoints - Deduct negative points for collisions
 ; Input: AL = points to subtract
 ; Ensures score doesn't go below 0
 SubtractPoints PROC
-    movzx ecx, score        ; Load current score
-    cmp ecx, eax            ; Compare score with penalty
-    jl sub_to_zero          ; If score < penalty, set to 0
-    sub ecx, eax            ; Otherwise subtract
-    mov score, cl           ; Store result
-    jmp sub_done
+    movzx ecx,   score ; Load current score
+    cmp   ecx,   eax   ; Compare score with penalty
+    jl    sub_to_zero  ; If score < penalty, set to 0
+    sub   ecx,   eax   ; Otherwise subtract
+    mov   score, cl    ; Store result
+    jmp   sub_done
 sub_to_zero:
-    mov score, 0            ; Set to 0
+    mov score, 0 ; Set to 0
 sub_done:
     call DrawScoreboard
     ret
-SubtractPoints ENDP
+SubtractPoints         ENDP
 
 ; AwardPassengerDelivery - Award +10 points for passenger delivery
 AwardPassengerDelivery PROC
-    mov al, 10
+    mov  al, 10
     call AddPoints
     ret
 AwardPassengerDelivery ENDP
 
 ; PenaltyHitObstacle - Red/Yellow taxi hits obstacle (tree/box/building)
 ; Checks UserColourChoice: 1=Red (-2), 2=Yellow (-4)
-PenaltyHitObstacle PROC
+PenaltyHitObstacle     PROC
     cmp UserColourChoice, 1
-    je penalty_red_obstacle
+    je  penalty_red_obstacle
     ; Default to yellow
-    mov al, 4               ; Yellow taxi: -4 points
+    mov al,               4    ; Yellow taxi: -4 points
     jmp apply_obstacle_penalty
 penalty_red_obstacle:
-    mov al, 2               ; Red taxi: -2 points
+    mov al, 2 ; Red taxi: -2 points
 apply_obstacle_penalty:
     call SubtractPoints
     ret
@@ -4420,169 +4354,132 @@ PenaltyHitObstacle ENDP
 
 ; PenaltyHitCar - Red/Yellow taxi hits another car
 ; Checks UserColourChoice: 1=Red (-3), 2=Yellow (-2)
-PenaltyHitCar PROC
+PenaltyHitCar      PROC
     cmp UserColourChoice, 1
-    je penalty_red_car
+    je  penalty_red_car
     ; Default to yellow
-    mov al, 2               ; Yellow taxi: -2 points
+    mov al,               2 ; Yellow taxi: -2 points
     jmp apply_car_penalty
 penalty_red_car:
-    mov al, 3               ; Red taxi: -3 points
+    mov al, 3 ; Red taxi: -3 points
 apply_car_penalty:
     call SubtractPoints
     ret
-PenaltyHitCar ENDP
+PenaltyHitCar    ENDP
 
 ; PenaltyHitPerson - Any taxi hits pedestrian: -5 points
 PenaltyHitPerson PROC
-    mov al, 5
+    mov  al, 5
     call SubtractPoints
     ret
-PenaltyHitPerson ENDP
+PenaltyHitPerson     ENDP
 
 ; PenaltyWallCollision - Any taxi hits wall: -1 point
 PenaltyWallCollision PROC
-    cmp score, 0
-    je no_wall_penalty      ; Don't go below 0
-    mov al, 1
+    cmp  score, 0
+    je   no_wall_penalty ; Don't go below 0
+    mov  al,    1
     call SubtractPoints
 no_wall_penalty:
     ret
 PenaltyWallCollision ENDP
 
-ReinitializeGame PROC 
+ReinitializeGame     PROC
     ; ===== Player State =====
-    mov  xPos[0],   11
-    mov  yPos[0],   6
+    mov xPos[0], 11
+    mov yPos[0], 6
     
     ; ===== Game Variables =====
-    mov  score,     0
-    mov  inputChar, "+"
-    mov  speed,     0
+    mov score,     0
+    mov inputChar, "+"
+    mov speed,     0
     
     ; ===== Passenger System =====
     call ResetAllPassengers     ; Reset all passenger states to waiting
-    mov currentPassenger, 255   ; No passenger being carried
-    mov pickedUpPassenger, 0    ; Not carrying anyone
-    mov passengerCount, 0       ; No passengers counted yet
+    mov  currentPassenger,  255 ; No passenger being carried
+    mov  pickedUpPassenger, 0   ; Not carrying anyone
+    mov  passengerCount,    0   ; No passengers counted yet
     
     ; ===== Coin/Bonus Position =====
     mov xCoinPos, 0
     mov yCoinPos, 0
     
     ; ===== Buildings & Obstacles =====
-    mov boxCount, 0
-    mov treeCount, 0
+    mov boxCount,            0
+    mov treeCount,           0
     mov buildingCountPlaced, 0
     
     ; Clear box positions array
     mov esi, OFFSET boxPositions
     mov ecx, 14
-    xor al, al
+    xor al,  al
 clear_boxes:
-    mov [esi], al
-    inc esi
+    mov  [esi], al
+    inc  esi
     loop clear_boxes
     
     ; Clear tree positions array
     mov esi, OFFSET treePositions
     mov ecx, 14
-    xor al, al
+    xor al,  al
 clear_trees:
-    mov [esi], al
-    inc esi
+    mov  [esi], al
+    inc  esi
     loop clear_trees
     
     ; Clear building positions array
     mov esi, OFFSET buildingPositions
     mov ecx, 200
-    xor al, al
+    xor al,  al
 clear_buildings:
-    mov [esi], al
-    inc esi
+    mov  [esi], al
+    inc  esi
     loop clear_buildings
     
     ; ===== NPC Car 1 - Reset to start position and state =====
-    mov npc1X, 30
-    mov npc1Y, 10
-    mov npc1StartX, 30
-    mov npc1StartY, 10
-    mov npc1Direction, 1
-    mov npc1StepCount, 0
+    mov npc1X,           30
+    mov npc1Y,           10
+    mov npc1StartX,      30
+    mov npc1StartY,      10
+    mov npc1Direction,   1
+    mov npc1StepCount,   0
     mov npc1MoveCounter, 0
-    mov npc1MoveMode, 1
+    mov npc1MoveMode,    1
     
     ; ===== NPC Car 2 - Reset to start position and state =====
-    mov npc2X, 60
-    mov npc2Y, 12
-    mov npc2StartX, 60
-    mov npc2StartY, 12
-    mov npc2Direction, 1
-    mov npc2StepCount, 0
+    mov npc2X,           60
+    mov npc2Y,           12
+    mov npc2StartX,      60
+    mov npc2StartY,      12
+    mov npc2Direction,   1
+    mov npc2StepCount,   0
     mov npc2MoveCounter, 0
-    mov npc2MoveMode, 2
+    mov npc2MoveMode,    2
     
     ; ===== NPC Car 3 - Reset to start position and state =====
-    mov npc3X, 90
-    mov npc3Y, 18
-    mov npc3StartX, 90
-    mov npc3StartY, 18
-    mov npc3Direction, 1
-    mov npc3StepCount, 0
+    mov npc3X,           90
+    mov npc3Y,           18
+    mov npc3StartX,      90
+    mov npc3StartY,      18
+    mov npc3Direction,   1
+    mov npc3StepCount,   0
     mov npc3MoveCounter, 0
-    mov npc3MoveMode, 1
+    mov npc3MoveMode,    1
     
     ; ===== Time Mode Variables =====
     mov displaySeconds, 120
-    mov timeStartMs, 0
-    mov timeElapsedMs, 0
+    mov timeStartMs,    0
+    mov timeElapsedMs,  0
     
     ; ===== Pause State =====
     mov isPaused, 0
     
     Call ClrScr
-    jmp  main           
+    jmp  main
 ReinitializeGame ENDP
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 END              main
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 ; irvine32 functions that are not in the https://csc.csudh.edu/mmccullough/asm/help/index.html?page=source%2Fabout.htm
