@@ -1,6 +1,6 @@
 .386
-.model       flat,                                         stdcall
-.stack       4096
+.MODEL flat, stdcall
+.STACK 4096
 
 ; =============================================
 ; Irvine32 Library Includes
@@ -81,6 +81,9 @@ strTryAgain  BYTE "Try Again?  1=yes, 0=no",               0
 invalidInput BYTE "invalid input",                         0
 strYouDied   BYTE "you died ",                             0
 strPoints    BYTE " point(s)",                             0
+strLevelComplete BYTE "*** LEVEL COMPLETE! ***",          0
+str4PassengersDelivered BYTE "4 Passengers Successfully Delivered!", 0
+strYourScore BYTE "Your Score: ",                         0
 strCarrying  BYTE "Carrying passenger: ",                  0
 strWaiting   BYTE "Passengers waiting: ",                  0
 blank        BYTE "                                     ", 0
@@ -285,11 +288,16 @@ pressAnyKey         BYTE "Press any key to return to main menu...", 0
     endlessModeName BYTE "Endless Mode", 0
     
     ; Time Mode Variables
-    timeCounter     BYTE 60         ; Countdown timer (60 seconds)
-    timeFrameCounter BYTE 0         ; Frame counter for timer updates
+    timeStartMs     DWORD 0         ; Starting time in milliseconds
+    timeElapsedMs   DWORD 0         ; Elapsed time in milliseconds
+    timeLimitMs     DWORD 120000    ; Time limit in milliseconds (120 seconds = 2 minutes)
+    displaySeconds  BYTE 120        ; Display value (seconds remaining)
     strTimeLeft     BYTE "Time: ", 0
     endlessComingSoon BYTE "Coming Soon!", 0
     strTimeUp       BYTE "Time's Up! You died!", 0
+    deliveredCount  BYTE 0          ; Number of passengers delivered in time mode
+    requiredDeliveries BYTE 4       ; Must deliver 4 passengers in time mode
+    timeModeActive  BYTE 0          ; Flag: 1 if in time mode, 0 otherwise
                   
     leaderboardMsg BYTE "***No LEADERBOARD Record Yet***",0Dh,0Ah
                    BYTE "NO Leaderboard record be the first one to register :)", 0
@@ -495,6 +503,9 @@ start_new_game:
     mov score, 0
     ; Reset leaderboard count so we load from file fresh
     mov LeaderBoardCount, 0
+    
+    ; Reset timeModeActive to 0 (will be set by GameModeSelectionScreen if needed)
+    ; Note: GameModeSelectionScreen already sets timeModeActive = 1 if time mode selected
     
     call DrawWall         ;draw walls
     call DrawScoreboard   ;draw scoreboard
@@ -906,6 +917,7 @@ gameModeInputLoop:
     jmp gameModeInputLoop
 setCareerMode:
     mov currentGameMode, 1
+    mov timeModeActive, 0           ; Deactivate time mode for career
     mov dh, 18
     mov dl, 5
     call Gotoxy
@@ -918,6 +930,12 @@ setCareerMode:
     ret
 setTimeMode:
     mov currentGameMode, 2
+    mov timeModeActive, 1           ; Activate time mode
+    mov displaySeconds, 120         ; Display 120 seconds (2 minutes)
+    call GetMseconds                ; Get current system time in milliseconds
+    mov timeStartMs, eax            ; Store start time
+    mov timeElapsedMs, 0            ; Reset elapsed time
+    mov deliveredCount, 0           ; Reset delivered passenger count
     mov dh, 18
     mov dl, 5
     call Gotoxy
@@ -930,6 +948,7 @@ setTimeMode:
     ret
 setEndlessMode:
     mov currentGameMode, 3
+    mov timeModeActive, 0           ; Deactivate time mode for endless
     mov dh, 18
     mov dl, 5
     call Gotoxy
@@ -1692,6 +1711,21 @@ drawCar:
     mov boxCount, 0
     mov treeCount, 0
     
+    ; Initialize timer display for time mode
+    cmp timeModeActive, 1
+    jne skip_timer_init
+    mov dl, 95          ; Right side of screen (X position)
+    mov dh, 29          ; Bottom of screen (Y position)
+    call Gotoxy
+    mov edx, OFFSET strTimeLeft
+    call WriteString
+    movzx eax, displaySeconds
+    call WriteDec
+    mov al, ' '
+    call WriteChar
+    call WriteChar
+    
+skip_timer_init:
     mov esi, 0
     mov ecx, 1 ; draw only the head (car)
 drawCar_loop:
@@ -1712,6 +1746,16 @@ drawCar_loop:
     mov  dh, 1
     call Gotoxy
 
+    ; Update time counter if in time mode
+    cmp timeModeActive, 1
+    jne skip_time_update
+    call UpdateTimeCounter
+    ; Check if time is up (displaySeconds = 0)
+    cmp displaySeconds, 0
+    je time_is_up
+    
+skip_time_update:
+
     ; Erase and move NPC cars
     call EraseNPCs
     call MoveNPCs
@@ -1720,7 +1764,7 @@ drawCar_loop:
    
 
     ; get user key input
-    call ReadKey  ; No Key Pressed → ZF = 1 (Zero Flag SET) on Key Pressed call ReadKey → ZF = 0 (Zero Flag CLEAR)
+    call ReadKey  ; No Key Passed → ZF = 1 (Zero Flag SET) on Key Pressed call ReadKey → ZF = 0 (Zero Flag CLEAR)
     jz   gameLoop ;no key → wait for next key press
     
     ; Handle extended (arrow) keys: when AL==0 the scan code is in AH
@@ -2158,6 +2202,11 @@ noMoveUp:
     npc_collision:
         call PenaltyHitCar
         jmp gameLoop
+
+time_is_up:
+    mov timeModeActive, 0          ; Deactivate time mode
+    call YouDied                   ; Time ran out - player dies
+    jmp playagn                    ; Return to play again/menu
 
 	died:
 	call YouDied
@@ -3175,6 +3224,54 @@ passenger_display_done:
 	ret
 DrawScoreboard ENDP
 
+; =============================================
+; UpdateTimeCounter - Uses system time for accurate timer
+; =============================================
+UpdateTimeCounter PROC
+    ; Get current time in milliseconds
+    call GetMseconds                ; Returns time in EAX
+    
+    ; Calculate elapsed time: current - start
+    sub eax, timeStartMs
+    mov timeElapsedMs, eax
+    
+    ; Calculate remaining time: 120000ms - elapsed
+    mov eax, 120000                 ; 2 minutes in milliseconds
+    sub eax, timeElapsedMs
+    
+    ; If time is up or negative, set to 0
+    cmp eax, 0
+    jge time_valid
+    mov eax, 0
+    
+time_valid:
+    ; Convert milliseconds to seconds (divide by 1000)
+    mov ebx, 1000
+    xor edx, edx
+    div ebx                         ; EAX = seconds, EDX = remainder
+    
+    ; Store the display seconds
+    mov displaySeconds, al
+    
+    ; Display the updated timer on screen (right bottom corner)
+    mov dl, 95          ; Right side of screen (X position)
+    mov dh, 29          ; Bottom of screen (Y position)
+    call Gotoxy
+    mov edx, OFFSET strTimeLeft
+    call WriteString
+    
+    ; Display time value
+    movzx eax, displaySeconds
+    call WriteDec
+    
+    ; Clear any leftover digits by writing spaces
+    mov al, ' '
+    call WriteChar
+    call WriteChar
+    call WriteChar
+    
+    ret
+UpdateTimeCounter ENDP
 
 ; =============================================
 ; DrawPlayer    esi = index of player to draw
@@ -4054,7 +4151,23 @@ try_dropoff:
     mov pickedUpPassenger, 0
     mov currentPassenger, 255
     
-    ; Check if ALL passengers are delivered (all have state 2)
+    ; If in time mode, increment delivery count
+    cmp timeModeActive, 1
+    jne check_all_passengers
+    
+    inc deliveredCount
+    
+    ; Check if we've delivered the required number in time mode
+    cmp deliveredCount, 4
+    jl check_all_passengers
+    
+    ; Time mode: 4 passengers delivered - WIN!
+    mov timeModeActive, 0
+    call DisplayTimeModeLevelComplete
+    jmp drop_not_at_dest
+    
+check_all_passengers:
+    ; Check if ALL passengers are delivered (all have state 2) - for career/endless mode
     call CheckAllPassengersDelivered
     cmp al, 1
     jne next_passenger_ready
@@ -4130,6 +4243,64 @@ EatingCoin ENDP
 
 
 
+
+; =============================================
+; DisplayTimeModeLevelComplete - handles when player completes time mode
+; =============================================
+DisplayTimeModeLevelComplete PROC
+	mov  eax, 1000
+	call delay
+	Call ClrScr
+	
+	mov  dl,  50
+	mov  dh,  12
+	call Gotoxy
+	mov  edx, OFFSET strLevelComplete
+	call WriteString
+
+	mov   dl,  50
+	mov   dh,  14
+	call  Gotoxy
+	mov  edx, OFFSET str4PassengersDelivered
+	call WriteString
+
+	mov   dl,  56
+	mov   dh,  16
+	call  Gotoxy
+	mov  edx, OFFSET strYourScore
+	call WriteString
+	movzx eax, score
+	call  WriteInt
+	mov   edx, OFFSET strPoints
+	call  WriteString
+
+	mov  dl,  50
+	mov  dh,  20
+	call Gotoxy
+	mov  edx, OFFSET strTryAgain
+	call WriteString
+
+	retry_time:
+	mov  dh, 21
+	mov  dl, 56
+	call Gotoxy
+	call ReadInt
+	cmp  al, 1
+	je   playagn
+	cmp  al, 0
+	je   exitgame
+
+	mov  dh,  19
+	call Gotoxy
+	mov  edx, OFFSET invalidInput
+	call WriteString
+	mov  dl,  56
+	mov  dh,  21
+	call Gotoxy
+	mov  edx, OFFSET blank
+	call WriteString
+	jmp  retry_time
+DisplayTimeModeLevelComplete ENDP
 
 ; =============================================
 ; YouDied - handles when player dies
@@ -4362,8 +4533,9 @@ clear_buildings:
     mov npc3MoveMode, 1
     
     ; ===== Time Mode Variables =====
-    mov timeCounter, 60
-    mov timeFrameCounter, 0
+    mov displaySeconds, 120
+    mov timeStartMs, 0
+    mov timeElapsedMs, 0
     
     ; ===== Pause State =====
     mov isPaused, 0
