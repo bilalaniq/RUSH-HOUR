@@ -79,8 +79,6 @@ strPoints               BYTE " point(s)",                             0
 strLevelComplete        BYTE "*** LEVEL COMPLETE! ***",               0
 str4PassengersDelivered BYTE "4 Passengers Successfully Delivered!",  0
 strYourScore            BYTE "Your Score: ",                          0
-strCarrying             BYTE "Carrying passenger: ",                  0
-strWaiting              BYTE "Passengers waiting: ",                  0
 blank                   BYTE "                                     ", 0
 
 ; Represent the car (player vehicle) using 'T' characters (single char per segment)
@@ -286,8 +284,8 @@ pressAnyKey        BYTE "Press any key to return to main menu...",              
 
 
     
-    pauseMsg         BYTE "The game is paused.", 0Dh, 0Ah, 0
-    resumeMsg     BYTE "Press any key to resume, 'Q' to quit, or 'S' to save...", 0
+    pauseMsg         BYTE "Game Paused", 0
+    resumeMsg     BYTE "[Any Key] Resume  [Q] Quit  [S] Save", 0
     quitToMenuMsg BYTE "Returning to main menu...",                               0
     savingMsg     BYTE "Saving score to leaderboard...",                          0
     
@@ -1733,69 +1731,69 @@ handle_spacebar:
     jmp  gameLoop
 
 pause_game:
-    ; Pause menu at top-left corner of screen (narrower to fit terminal)
-    mov  dh,  0
-    mov  dl,  10
+    ; Pause menu at right side of screen
+    mov  dh,  1
+    mov  dl,  70
     call Gotoxy
-    mov  al,  201  ; ╔
+    mov  al,  218  ; ┌
     call WriteChar
-    mov  ecx, 35
-    mov  al,  205  ; ═
+    mov  ecx, 40
+    mov  al,  196  ; ─
     clear_top:
     call WriteChar
     loop clear_top
-    mov  al,  187  ; ╗
+    mov  al,  191  ; ┐
     call WriteChar
     
-    mov  dh,  1
-    mov  dl,  10
+    mov  dh,  2
+    mov  dl,  70
     call Gotoxy
-    mov  al,  186     ; ║
+    mov  al,  179     ; │
     call WriteChar
     mov  al,  ' '
-    mov  ecx, 35
+    mov  ecx, 40
     pause_space1:
     call WriteChar
     loop pause_space1
-    mov  al,  186     ; ║
+    mov  al,  179     ; │
     call WriteChar
     
-    mov  dh,  1
-    mov  dl,  12
+    mov  dh,  2
+    mov  dl,  73
     call Gotoxy
     mov  edx, OFFSET pauseMsg
     call WriteString
     
-    mov  dh,  2
-    mov  dl,  10
+    mov  dh,  3
+    mov  dl,  70
     call Gotoxy
-    mov  al,  186     ; ║
+    mov  al,  179     ; │
     call WriteChar
     mov  al,  ' '
-    mov  ecx, 35
+    mov  ecx, 40
     pause_space2:
     call WriteChar
     loop pause_space2
-    mov  al,  186     ; ║
+    mov  al,  179     ; │
     call WriteChar
     
-    mov  dh,  2
-    mov  dl,  12
+    mov  dh,  3
+    mov  dl,  73
     call Gotoxy
     mov  edx, OFFSET resumeMsg
     call WriteString
     
-    mov  dh,  3
-    mov  dl,  10
+    mov  dh,  4
+    mov  dl,  70
     call Gotoxy
-    mov  al,  200  ; ╚
+    mov  al,  192  ; └
     call WriteChar
-    mov  ecx, 35
-    mov  al,  205  ; ═
+    mov  ecx, 40
+    mov  al,  196  ; ─
     clear_bot:
     call WriteChar
     loop clear_bot
-    mov  al,  188  ; ╝
+    mov  al,  217  ; ┘
     call WriteChar
     
     ; Wait for input
@@ -1813,38 +1811,38 @@ pause_game:
     cmp al, 'Q'
     je  pause_quit_to_menu
     
-    ; Clear pause box lines - clear entire row from column 10-47
-    mov  dh,  0
-    mov  dl,  10
+    ; Clear pause box lines - clear entire area
+    mov  dh,  1
+    mov  dl,  70
     call Gotoxy
-    mov  ecx, 38           ; 10 to 47 = 38 chars
+    mov  ecx, 42           ; 70 to 111 = 42 chars
     mov  al,  ' '
     clear_pause_line1:
     call WriteChar
     loop clear_pause_line1
     
-    mov  dh,  1
-    mov  dl,  10
+    mov  dh,  2
+    mov  dl,  70
     call Gotoxy
-    mov  ecx, 38
+    mov  ecx, 42
     mov  al,  ' '
     clear_pause_line2:
     call WriteChar
     loop clear_pause_line2
     
-    mov  dh,  2
-    mov  dl,  10
+    mov  dh,  3
+    mov  dl,  70
     call Gotoxy
-    mov  ecx, 38
+    mov  ecx, 42
     mov  al,  ' '
     clear_pause_line3:
     call WriteChar
     loop clear_pause_line3
     
-    mov  dh,  3
-    mov  dl,  10
+    mov  dh,  4
+    mov  dl,  70
     call Gotoxy
-    mov  ecx, 38
+    mov  ecx, 42
     mov  al,  ' '
     clear_pause_line4:
     call WriteChar
@@ -1854,38 +1852,38 @@ pause_game:
     jmp gameLoop
 
 pause_save_score:
-    ; Clear pause box first
-    mov  dh,  0
-    mov  dl,  10
+    ; Clear pause box first (right side)
+    mov  dh,  1
+    mov  dl,  70
     call Gotoxy
-    mov  ecx, 38
+    mov  ecx, 42
     mov  al,  ' '
     clear_save_line1:
     call WriteChar
     loop clear_save_line1
     
-    mov  dh,  1
-    mov  dl,  10
+    mov  dh,  2
+    mov  dl,  70
     call Gotoxy
-    mov  ecx, 38
+    mov  ecx, 42
     mov  al,  ' '
     clear_save_line2:
     call WriteChar
     loop clear_save_line2
     
-    mov  dh,  2
-    mov  dl,  10
+    mov  dh,  3
+    mov  dl,  70
     call Gotoxy
-    mov  ecx, 38
+    mov  ecx, 42
     mov  al,  ' '
     clear_save_line3:
     call WriteChar
     loop clear_save_line3
     
-    mov  dh,  3
-    mov  dl,  10
+    mov  dh,  4
+    mov  dl,  70
     call Gotoxy
-    mov  ecx, 38
+    mov  ecx, 42
     mov  al,  ' '
     clear_save_line4:
     call WriteChar
@@ -1897,8 +1895,8 @@ pause_save_score:
     call  AddScoreToLeaderboard  ; Add score to leaderboard and save
     
     ; Display saving message
-    mov  dh,  12
-    mov  dl,  10
+    mov  dh,  2
+    mov  dl,  73
     call Gotoxy
     mov  eax, yellow + (black * 16)
     call SetTextColor
@@ -3125,35 +3123,7 @@ DrawScoreboard          PROC
 	cmp al, 1
 	jne not_carrying
 	
-	mov  edx, OFFSET strCarrying
-	call WriteString
-	
-	; Show which passenger index
-	movzx eax, currentPassenger
-	call  WriteInt
-	jmp   passenger_display_done
-	
 not_carrying:
-	mov  edx, OFFSET strWaiting
-	call WriteString
-	
-	; Show how many passengers left
-	mov ecx, 0
-	mov esi, OFFSET passengerStates
-	mov ebx, 5
-count_waiting:
-	mov al, [esi]
-	cmp al, 0
-	jne skip_count
-	inc ecx
-skip_count:
-	inc esi
-	dec ebx
-	jnz count_waiting
-	
-	movzx eax, cl
-	call  WriteInt
-	
 passenger_display_done:
 	ret
 DrawScoreboard    ENDP
